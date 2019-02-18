@@ -17,10 +17,8 @@ package csirsd
 import (
 	"context"
 	"log"
-	"strconv"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/intel/csi-intel-rsd/pkg/rsd"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -73,43 +71,11 @@ func (drv *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Contr
 
 // ListVolumes returns a list of available volumes
 func (drv *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
-	ssCollection, err := rsd.GetStorageServiceCollection(drv.rsdClient)
-	if err != nil {
-		return nil, errors.Wrap(err, "Can't get storage service collection")
-	}
-
-	services, err := ssCollection.GetMembers(drv.rsdClient)
-	if err != nil {
-		return nil, errors.Wrap(err, "Can't get storage service collection members")
-	}
-
-	if len(services) == 0 {
-		return nil, errors.New("No storage services found in a collection")
-	}
-
-	storageService := services[0]
-	volCollection, err := storageService.GetVolumeCollection(drv.rsdClient)
-	if err != nil {
-		return nil, errors.Wrap(err, "Can't get volume collection")
-	}
-
-	volumes, err := volCollection.GetMembers(drv.rsdClient)
-	if err != nil {
-		return nil, errors.Wrap(err, "Can't get volume collection members")
-	}
-
 	var entries []*csi.ListVolumesResponse_Entry
-	for _, volume := range volumes {
-		capacityBytes, err := strconv.ParseInt(volume.CapacityBytes, 10, 64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "Can't convert volume CapacityBytes '%s' to int64", volume.CapacityBytes)
-		}
+	for _, volume := range drv.listCSIVolumes() {
 		entries = append(entries,
 			&csi.ListVolumesResponse_Entry{
-				Volume: &csi.Volume{
-					VolumeId:      strconv.Itoa(volume.ID),
-					CapacityBytes: capacityBytes,
-				},
+				Volume: volume,
 			})
 	}
 

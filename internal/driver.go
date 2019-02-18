@@ -135,6 +135,15 @@ func (drv *Driver) Run() error {
 	return drv.srv.Serve(listener)
 }
 
+// List existing volumes
+func (drv *Driver) listCSIVolumes() []*csi.Volume {
+	csiVolumes := []*csi.Volume{}
+	for _, vol := range drv.volumes {
+		csiVolumes = append(csiVolumes, vol.CSIVolume)
+	}
+	return csiVolumes
+}
+
 // Creates new volume and adds it to the Volumes map
 func (drv *Driver) newVolume(name string, requiredCapacity int64) (*csi.Volume, error) {
 	if _, exists := drv.volumes[name]; exists {
