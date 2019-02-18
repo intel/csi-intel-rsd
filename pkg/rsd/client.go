@@ -15,7 +15,9 @@
 package rsd
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -25,6 +27,8 @@ import (
 // Transport is an interface to communicate with RSD server
 type Transport interface {
 	Get(entrypoint string, result interface{}) error
+	Post(entrypoint string, data map[string]string, result interface{}) (*http.Header, error)
+	Delete(entrypoint string, data map[string]string, result interface{}) (*http.Header, error)
 }
 
 // Client is a struct that interfaces with the RSD Redfish API
@@ -45,32 +49,60 @@ func NewClient(baseurl, username, password string, timeout time.Duration) (*Clie
 	}, nil
 }
 
-// Get queries RSD endpoing and returns decoded http response
-func (rsd *Client) Get(entrypoint string, result interface{}) error {
+// request queries sends HTTP request to the RSD endpoint and decodes HTTP response
+func (rsd *Client) request(entrypoint, method string, body io.Reader, result interface{}) (*http.Header, error) {
 	url := rsd.baseurl + entrypoint
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(method, url, body)
 	if err != nil {
-		return errors.Wrapf(err, "Can't make request from %s", url)
+		return nil, errors.Wrapf(err, "Can't make request from %s", url)
 	}
 
 	if rsd.username != "" {
 		req.SetBasicAuth(rsd.username, rsd.password)
 	}
 
+	req.Header.Set("Content-Type", "application/json")
+
 	resp, err := rsd.httpClient.Do(req)
 	if err != nil {
-		return errors.Wrapf(err, "Can't get http response from %s", url)
+		return nil, errors.Wrapf(err, "Can't get http response from %s", url)
 	}
 
 	defer resp.Body.Close()
 
-	// Decode response
-	err = json.NewDecoder(resp.Body).Decode(result)
-	if err != nil {
-		return errors.Wrapf(err, "Can't decode http response from %s", url)
+	// Decode response if needed
+	if result != nil {
+		err = json.NewDecoder(resp.Body).Decode(result)
+		if err != nil {
+			return &resp.Header, errors.Wrapf(err, "Can't decode http response from %s", url)
+		}
 	}
 
-	return nil
+	return &resp.Header, nil
+}
+
+// Get sends GET RSD endpoint and returns decoded http response
+func (rsd *Client) Get(entrypoint string, result interface{}) error {
+	_, err := rsd.request(entrypoint, "GET", nil, result)
+	return err
+}
+
+// Post sends POST request to RSD endpoint and returns decoded http response
+func (rsd *Client) Post(entrypoint string, data map[string]string, result interface{}) (*http.Header, error) {
+	marshalled, err := json.Marshal(data)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Can't marshal data: %v", data)
+	}
+	return rsd.request(entrypoint, "POST", bytes.NewReader(marshalled), result)
+}
+
+// Delete sends DELETE request to RSD endpoint
+func (rsd *Client) Delete(entrypoint string, data map[string]string, result interface{}) (*http.Header, error) {
+	marshalled, err := json.Marshal(data)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Can't marshal data: %v", data)
+	}
+	return rsd.request(entrypoint, "DELETE", bytes.NewReader(marshalled), result)
 }
 
 // GetStorageServiceCollection returns StorageServiceCollection
@@ -82,4 +114,23 @@ func GetStorageServiceCollection(rsd Transport) (*StorageServiceCollection, erro
 	}
 
 	return &result, err
+}
+
+// GetVolumeCollection returns VolumeCollection for the storage service <ssNum>
+func GetVolumeCollection(rsd Transport, ssNum int) (*VolumeCollection, error) {
+	ssCollection, err := GetStorageServiceCollection(rsd)
+	if err != nil {
+		return nil, errors.Wrap(err, "Can't get storage service collection")
+	}
+
+	services, err := ssCollection.GetMembers(rsd)
+	if err != nil {
+		return nil, errors.Wrap(err, "Can't get storage service collection members")
+	}
+
+	if len(services) == 0 {
+		return nil, errors.New("No storage services found in a collection")
+	}
+
+	return services[ssNum].GetVolumeCollection(rsd)
 }

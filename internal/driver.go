@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"sync"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -39,6 +40,18 @@ const (
 	DriverVersion = "0.0.1"
 )
 
+// Volume contains mapping between CSI and RSD volumes and internal driver information about a volume status
+type Volume struct {
+	CSIVolume       *csi.Volume
+	RSDVolume       *rsd.Volume
+	Name            string
+	NodeID          string
+	ISStaged        bool
+	ISPublished     bool
+	StageTargetPath string
+	TargetPath      string
+}
+
 // Driver implements the following CSI interfaces:
 //
 //   csi.IdentityServer
@@ -46,10 +59,14 @@ const (
 //   csi.NodeServer
 //
 type Driver struct {
+	sync.Mutex
 	endpoint string
 	srv      *grpc.Server
 
 	rsdClient *rsd.Client
+
+	volumes    map[string]*Volume
+	volumesRWL sync.RWMutex
 
 	// ready defines whether the driver is ready to function. This value will
 	// be used by the `Identity` service via the `Probe()` method.
@@ -63,6 +80,7 @@ func NewDriver(ep string, rsdClient *rsd.Client) *Driver {
 	return &Driver{
 		endpoint:  ep,
 		rsdClient: rsdClient,
+		volumes:   map[string]*Volume{},
 	}
 }
 
@@ -70,7 +88,7 @@ func NewDriver(ep string, rsdClient *rsd.Client) *Driver {
 func (drv *Driver) Run() error {
 	u, err := url.Parse(drv.endpoint)
 	if err != nil {
-		return fmt.Errorf("unable to parse address: %q", err)
+		return fmt.Errorf("unable to parse address: %v", err)
 	}
 
 	spath := path.Join(u.Host, filepath.FromSlash(u.Path))
@@ -89,7 +107,7 @@ func (drv *Driver) Run() error {
 	if _, err = os.Stat(spath); !os.IsNotExist(err) {
 		log.Printf("removing socket %s", spath)
 		if err = os.Remove(spath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove unix domain socket file %s, error: %s", spath, err)
+			return fmt.Errorf("failed to remove unix domain socket file %s, error: %v", spath, err)
 		}
 	}
 
@@ -102,7 +120,7 @@ func (drv *Driver) Run() error {
 	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		resp, err := handler(ctx, req)
 		if err != nil {
-			log.Fatalf("method %s failed", info.FullMethod)
+			log.Fatalf("method %s failed, error: %s", info.FullMethod, err)
 		}
 		return resp, err
 	}
@@ -115,4 +133,97 @@ func (drv *Driver) Run() error {
 	drv.ready = true
 	log.Printf("server started serving on %s", drv.endpoint)
 	return drv.srv.Serve(listener)
+}
+
+// List existing volumes
+func (drv *Driver) listCSIVolumes() []*csi.Volume {
+	csiVolumes := []*csi.Volume{}
+	for _, vol := range drv.volumes {
+		csiVolumes = append(csiVolumes, vol.CSIVolume)
+	}
+	return csiVolumes
+}
+
+// Creates new volume and adds it to the Volumes map
+func (drv *Driver) newVolume(name string, requiredCapacity int64) (*csi.Volume, error) {
+	if _, exists := drv.volumes[name]; exists {
+		return nil, fmt.Errorf("failed attempt to create exisiting volume %s", name)
+	}
+
+	// Volume doesn't exist - create new one
+
+	// Get volume collection
+	client := drv.rsdClient
+	volCollection, err := rsd.GetVolumeCollection(client, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create new RSD volume
+	rsdVolume, err := volCollection.NewVolume(client, requiredCapacity)
+	if err != nil {
+		return nil, err
+	}
+
+	strID := strconv.Itoa(rsdVolume.ID)
+
+	capacityBytes, err := strconv.ParseInt(rsdVolume.CapacityBytes, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("can't convert CapacityBytes %s to int: %v", rsdVolume.CapacityBytes, err)
+	}
+
+	csiVolume := &csi.Volume{
+		VolumeId:      strID,
+		VolumeContext: map[string]string{"name": name},
+		CapacityBytes: capacityBytes,
+	}
+
+	drv.volumes[name] = &Volume{
+		CSIVolume:       csiVolume,
+		RSDVolume:       rsdVolume,
+		NodeID:          "",
+		ISStaged:        false,
+		ISPublished:     false,
+		StageTargetPath: "",
+		TargetPath:      "",
+	}
+
+	return csiVolume, nil
+}
+
+func (drv *Driver) findCSIVolumeByName(name string) *csi.Volume {
+	if vol, exists := drv.volumes[name]; exists {
+		return vol.CSIVolume
+	}
+	return nil
+}
+
+func (drv *Driver) findVolByID(volumeID string) (string, *Volume) {
+	for name, vol := range drv.volumes {
+		if vol.CSIVolume.VolumeId == volumeID {
+			return name, vol
+		}
+	}
+	return "", nil
+}
+
+// DeleteVolume deletes RSD volume using RSD API
+// and removes volume from the internal map drv.volumes
+// It does nothing if volume doesn't exist
+func (drv *Driver) deleteVolume(volumeID string) error {
+	drv.volumesRWL.Lock()
+	defer drv.volumesRWL.Unlock()
+
+	name, vol := drv.findVolByID(volumeID)
+	if name != "" {
+		// delete RSD volume
+		err := vol.RSDVolume.Delete(drv.rsdClient)
+		if err != nil {
+			return fmt.Errorf("Can't delete RSD Volume %s: %v", vol.RSDVolume.ID, err)
+		}
+
+		// delete volume from the map
+		delete(drv.volumes, name)
+	}
+	return nil
 }
