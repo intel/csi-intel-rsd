@@ -31,9 +31,18 @@ $ csc identity -e unix:///tmp/csirsd.sock probe
 true
 
 $ csc controller -e unix:///tmp/csirsd.sock get-capabilities
+&{type:CREATE_DELETE_VOLUME }
 &{type:LIST_VOLUMES }
 
+# Create 2 volumes
+$ csc controller -e unix:///tmp/csirsd.sock create-volume test --cap SINGLE_NODE_WRITER,block --req-bytes 200000
+"14" 200000 "name"="test"
+
+$ csc controller -e unix:///tmp/csirsd.sock create-volume test1 --cap SINGLE_NODE_WRITER,block --req-bytes 100000
+"15" 100000 "name"="test1"
+
+# List them
 $ csc controller -e unix:///tmp/csirsd.sock list-volumes
-"12" 100000
-"13" 100000
+"14" 200000 "name"="test"
+"15" 100000 "name"="test1"
 ```

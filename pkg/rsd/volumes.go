@@ -15,6 +15,9 @@
 package rsd
 
 import (
+	"net/url"
+	"strconv"
+
 	"github.com/pkg/errors"
 )
 
@@ -99,6 +102,33 @@ type Volume struct {
 			} `json:"Metrics"`
 		} `json:"Intel_RackScale"`
 	} `json:"Oem"`
+}
+
+// NewVolume creates new volume
+func (collection *VolumeCollection) NewVolume(rsd Transport, capacity int64) (*Volume, error) {
+	data := map[string]string{"CapacityBytes": strconv.FormatInt(capacity, 10)}
+	header, err := rsd.Post(collection.OdataID, data, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "Can't create new Volume")
+	}
+
+	location := header.Get("Location")
+	if location == "" {
+		return nil, errors.Errorf("No 'Location' header found: %s", collection.OdataID)
+	}
+
+	locURL, err := url.Parse(location)
+	if err != nil {
+		return nil, errors.Errorf("Can't parse location url %s for new volume", location)
+	}
+
+	var volume Volume
+	err = rsd.Get(locURL.EscapedPath(), &volume)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Can't query new volume url: %s", locURL.EscapedPath())
+	}
+
+	return &volume, nil
 }
 
 // GetMembers returns members of Volume collection

@@ -22,6 +22,21 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/intel/csi-intel-rsd/pkg/rsd"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+// Size constants (Kilobytes, Megabytes, etc)
+const (
+	_  = iota
+	KB = 1 << (10 * iota)
+	MB
+	GB
+	TB
+)
+
+const (
+	defaultVolumeCapacity int64 = 16 * MB
 )
 
 // ControllerGetCapabilities returns the capabilities of the controller service.
@@ -38,7 +53,7 @@ func (drv *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Contr
 
 	var caps []*csi.ControllerServiceCapability
 	for _, cap := range []csi.ControllerServiceCapability_RPC_Type{
-		//csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		//csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 		csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
 		//csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
@@ -122,7 +137,7 @@ func (drv *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Vali
 			VolumeCapabilities: []*csi.VolumeCapability{
 				{
 					AccessMode: &csi.VolumeCapability_AccessMode{
-							Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
 					},
 				},
 			},
@@ -133,9 +148,79 @@ func (drv *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Vali
 	return resp, nil
 }
 
+// validateCapabilities validates the requested capabilities.
+func validateCapabilities(caps []*csi.VolumeCapability) bool {
+	vcaps := []*csi.VolumeCapability_AccessMode{&csi.VolumeCapability_AccessMode{
+		Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+	}}
+
+	hasSupport := func(mode csi.VolumeCapability_AccessMode_Mode) bool {
+		for _, m := range vcaps {
+			if mode == m.Mode {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, cap := range caps {
+		if !hasSupport(cap.AccessMode.Mode) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // CreateVolume creates new RSD Volume
 func (drv *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
-	return nil, errors.New("CreateVolume is not implemented")
+	if req.Name == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume Name can't be empty")
+	}
+
+	if req.VolumeCapabilities == nil || len(req.VolumeCapabilities) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "Volume %s: capabilities are missing", req.Name)
+	}
+
+	if !validateCapabilities(req.VolumeCapabilities) {
+		return nil, status.Errorf(codes.InvalidArgument, "Volume %s: invalid volume capabilities requested. Only SINGLE_NODE_WRITER is supported", req.Name)
+	}
+
+	// get required capacity
+	requiredCapacity := defaultVolumeCapacity
+	if capRange := req.CapacityRange; capRange != nil {
+		if requiredBytes := capRange.GetRequiredBytes(); requiredBytes > 0 {
+			requiredCapacity = requiredBytes
+		}
+		if limitBytes := capRange.GetLimitBytes(); limitBytes > 0 {
+			requiredCapacity = limitBytes
+		}
+	}
+
+	// lock driver volumes to satisfy idepotency requirements
+	drv.volumesRWL.Lock()
+	defer drv.volumesRWL.Unlock()
+
+	// Check if the volume already exists.
+	if vol := drv.findCSIVolumeByName(req.Name); vol != nil {
+		// Check if existing volume's capacity satisfies request
+		capacityBytes := vol.GetCapacityBytes()
+		if capacityBytes < requiredCapacity {
+			return nil, status.Errorf(codes.AlreadyExists, "Volume %s has smaller size(%d) than required(%d)", req.Name, capacityBytes, requiredCapacity)
+		}
+		return &csi.CreateVolumeResponse{Volume: vol}, nil
+	}
+
+	// Volume doesn't exist - create new one
+	vol, err := drv.newVolume(req.Name, requiredCapacity)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, err.Error())
+	}
+
+	resp := &csi.CreateVolumeResponse{Volume: vol}
+
+	log.Printf("create volume response: %f", resp)
+	return resp, nil
 }
 
 // DeleteVolume deletes existing RSD Volume
