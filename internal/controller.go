@@ -19,7 +19,6 @@ import (
 	"log"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -89,11 +88,11 @@ func (drv *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest)
 // ValidateVolumeCapabilities checks if requested volume capabilities are supported
 func (drv *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	if req.VolumeId == "" {
-		return nil, errors.New("ValidateVolumeCapabilities: Volume ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume ID can't be empty")
 	}
 
 	if req.VolumeCapabilities == nil {
-		return nil, errors.New("ValidateVolumeCapabilities: Volume Capabilities must be provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume Capabilities must be provided")
 	}
 
 	// TODO: check if volume exist?
@@ -207,30 +206,30 @@ func (drv *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeReques
 
 // GetCapacity returns the capacity of the storage
 func (drv *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
-	return nil, errors.New("GetCapacity is not implemented")
+	return nil, status.Error(codes.Unimplemented, "GetCapacity is not implemented")
 }
 
 // ControllerPublishVolume attaches the given volume to the node
 func (drv *Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
-	return nil, errors.New("ControllerPublishVolume is not implemented")
+	return nil, status.Error(codes.Unimplemented, "ControllerPublishVolume is not implemented")
 }
 
 // ControllerUnpublishVolume deattaches the given volume from the node
 func (drv *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
-	return nil, errors.New("ControllerUnpublishVolume is not implemented")
+	return nil, status.Error(codes.Unimplemented, "ControllerUnpublishVolume is not implemented")
 }
 
 // ListSnapshots returns a list of requested volume snapshots
 func (drv *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
-	return nil, errors.New("ListSnapshots is not implemented")
+	return nil, status.Error(codes.Unimplemented, "ListSnapshots is not implemented")
 }
 
 // CreateSnapshot creates new volume snapshot
 func (drv *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
-	return nil, errors.New("CreateSnapshot is not implemented")
+	return nil, status.Error(codes.Unimplemented, "CreateSnapshot is not implemented")
 }
 
 // DeleteSnapshot deletes volume snapshot
 func (drv *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
-	return nil, errors.New("DeleteSnapshot is not implemented")
+	return nil, status.Error(codes.Unimplemented, "DeleteSnapshot is not implemented")
 }

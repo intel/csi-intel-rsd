@@ -88,7 +88,7 @@ func NewDriver(ep string, rsdClient *rsd.Client) *Driver {
 func (drv *Driver) Run() error {
 	u, err := url.Parse(drv.endpoint)
 	if err != nil {
-		return fmt.Errorf("unable to parse address: %q", err)
+		return fmt.Errorf("unable to parse address: %v", err)
 	}
 
 	spath := path.Join(u.Host, filepath.FromSlash(u.Path))
@@ -107,7 +107,7 @@ func (drv *Driver) Run() error {
 	if _, err = os.Stat(spath); !os.IsNotExist(err) {
 		log.Printf("removing socket %s", spath)
 		if err = os.Remove(spath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove unix domain socket file %s, error: %s", spath, err)
+			return fmt.Errorf("failed to remove unix domain socket file %s, error: %v", spath, err)
 		}
 	}
 
@@ -120,7 +120,7 @@ func (drv *Driver) Run() error {
 	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		resp, err := handler(ctx, req)
 		if err != nil {
-			log.Fatalf("method %s failed", info.FullMethod)
+			log.Fatalf("method %s failed, error: %s", info.FullMethod, err)
 		}
 		return resp, err
 	}
