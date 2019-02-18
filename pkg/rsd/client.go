@@ -28,6 +28,7 @@ import (
 type Transport interface {
 	Get(entrypoint string, result interface{}) error
 	Post(entrypoint string, data map[string]string, result interface{}) (*http.Header, error)
+	Delete(entrypoint string, data map[string]string, result interface{}) (*http.Header, error)
 }
 
 // Client is a struct that interfaces with the RSD Redfish API
@@ -93,6 +94,15 @@ func (rsd *Client) Post(entrypoint string, data map[string]string, result interf
 		return nil, errors.Wrapf(err, "Can't marshal data: %v", data)
 	}
 	return rsd.request(entrypoint, "POST", bytes.NewReader(marshalled), result)
+}
+
+// Delete sends DELETE request to RSD endpoint
+func (rsd *Client) Delete(entrypoint string, data map[string]string, result interface{}) (*http.Header, error) {
+	marshalled, err := json.Marshal(data)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Can't marshal data: %v", data)
+	}
+	return rsd.request(entrypoint, "DELETE", bytes.NewReader(marshalled), result)
 }
 
 // GetStorageServiceCollection returns StorageServiceCollection

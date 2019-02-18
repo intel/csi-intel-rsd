@@ -188,3 +188,33 @@ func (drv *Driver) findCSIVolumeByName(name string) *csi.Volume {
 	}
 	return nil
 }
+
+func (drv *Driver) findVolByID(volumeID string) (string, *Volume) {
+	for name, vol := range drv.volumes {
+		if vol.CSIVolume.VolumeId == volumeID {
+			return name, vol
+		}
+	}
+	return "", nil
+}
+
+// DeleteVolume deletes RSD volume using RSD API
+// and removes volume from the internal map drv.volumes
+// It does nothing if volume doesn't exist
+func (drv *Driver) deleteVolume(volumeID string) error {
+	drv.volumesRWL.Lock()
+	defer drv.volumesRWL.Unlock()
+
+	name, vol := drv.findVolByID(volumeID)
+	if name != "" {
+		// delete RSD volume
+		err := vol.RSDVolume.Delete(drv.rsdClient)
+		if err != nil {
+			return fmt.Errorf("Can't delete RSD Volume %s: %v", vol.RSDVolume.ID, err)
+		}
+
+		// delete volume from the map
+		delete(drv.volumes, name)
+	}
+	return nil
+}

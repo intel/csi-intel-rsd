@@ -225,7 +225,18 @@ func (drv *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeReques
 
 // DeleteVolume deletes existing RSD Volume
 func (drv *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
-	return nil, errors.New("DeleteVolume is not implemented")
+	//  If the volume is not specified, return error
+	if req.VolumeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID is missing")
+	}
+
+	err := drv.deleteVolume(req.VolumeId)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("volume %s has been deleted", req.VolumeId)
+	return &csi.DeleteVolumeResponse{}, nil
 }
 
 // GetCapacity returns the capacity of the storage

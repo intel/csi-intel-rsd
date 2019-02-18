@@ -45,4 +45,13 @@ $ csc controller -e unix:///tmp/csirsd.sock create-volume test1 --cap SINGLE_NOD
 $ csc controller -e unix:///tmp/csirsd.sock list-volumes
 "14" 200000 "name"="test"
 "15" 100000 "name"="test1"
+
+# Delete one of them
+$ csc controller -e unix:///tmp/csirsd.sock delete-volume 14
+14
+
+# List again
+$ csc controller -e unix:///tmp/csirsd.sock list-volumes
+"15" 100000 "name"="test1"
+
 ```

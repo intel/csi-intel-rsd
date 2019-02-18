@@ -145,3 +145,12 @@ func (collection *VolumeCollection) GetMembers(rsd Transport) ([]*Volume, error)
 	}
 	return result, nil
 }
+
+// Delete deletes volume
+func (volume *Volume) Delete(rsd Transport) error {
+	_, err := rsd.Delete(volume.OdataID, map[string]string{}, nil)
+	if err != nil {
+		return errors.Wrapf(err, "Can't delete Volume %s", volume.Name)
+	}
+	return nil
+}
