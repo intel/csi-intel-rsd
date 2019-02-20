@@ -219,7 +219,7 @@ func (drv *Driver) deleteVolume(volumeID string) error {
 		// delete RSD volume
 		err := vol.RSDVolume.Delete(drv.rsdClient)
 		if err != nil {
-			return fmt.Errorf("Can't delete RSD Volume %s: %v", vol.RSDVolume.ID, err)
+			return fmt.Errorf("Can't delete RSD Volume %d: %v", vol.RSDVolume.ID, err)
 		}
 
 		// delete volume from the map

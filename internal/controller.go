@@ -80,7 +80,7 @@ func (drv *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest)
 
 	resp := &csi.ListVolumesResponse{Entries: entries, NextToken: ""}
 
-	log.Printf("list volumes response: %f", resp)
+	log.Printf("list volumes response: %v", resp)
 
 	return resp, nil
 }
@@ -184,7 +184,7 @@ func (drv *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeReques
 
 	resp := &csi.CreateVolumeResponse{Volume: vol}
 
-	log.Printf("create volume response: %f", resp)
+	log.Printf("create volume response: %v", resp)
 	return resp, nil
 }
 
