@@ -63,7 +63,7 @@ type Driver struct {
 	endpoint string
 	srv      *grpc.Server
 
-	rsdClient *rsd.Client
+	rsdClient rsd.Transport
 
 	volumes    map[string]*Volume
 	volumesRWL sync.RWMutex
