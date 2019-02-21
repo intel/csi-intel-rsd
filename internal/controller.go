@@ -36,18 +36,18 @@ const (
 	defaultVolumeCapacity int64 = 16 * MB
 )
 
+func newCap(cap csi.ControllerServiceCapability_RPC_Type) *csi.ControllerServiceCapability {
+	return &csi.ControllerServiceCapability{
+		Type: &csi.ControllerServiceCapability_Rpc{
+			Rpc: &csi.ControllerServiceCapability_RPC{
+				Type: cap,
+			},
+		},
+	}
+}
+
 // ControllerGetCapabilities returns the capabilities of the controller service.
 func (drv *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
-	newCap := func(cap csi.ControllerServiceCapability_RPC_Type) *csi.ControllerServiceCapability {
-		return &csi.ControllerServiceCapability{
-			Type: &csi.ControllerServiceCapability_Rpc{
-				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: cap,
-				},
-			},
-		}
-	}
-
 	var caps []*csi.ControllerServiceCapability
 	for _, cap := range []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
@@ -68,7 +68,7 @@ func (drv *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Contr
 	return resp, nil
 }
 
-// ListVolumes returns a list of available volumes
+// ListVolumes returns a list of available volumes created by the driver
 func (drv *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	var entries []*csi.ListVolumesResponse_Entry
 	for _, volume := range drv.listCSIVolumes() {
@@ -87,7 +87,7 @@ func (drv *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest)
 
 // ValidateVolumeCapabilities checks if requested volume capabilities are supported
 func (drv *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
-	if req.VolumeId == "" {
+	if req == nil || req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID can't be empty")
 	}
 
@@ -95,18 +95,26 @@ func (drv *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Vali
 		return nil, status.Error(codes.InvalidArgument, "Volume Capabilities must be provided")
 	}
 
-	// TODO: check if volume exist?
+	// Check if volume exists
+	_, vol := drv.findVolByID(req.VolumeId)
+	if vol == nil {
+		return nil, status.Errorf(codes.NotFound, "Volume Id '%s' not found", req.VolumeId)
+	}
 
 	resp := &csi.ValidateVolumeCapabilitiesResponse{
 		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
-			VolumeCapabilities: []*csi.VolumeCapability{
-				{
-					AccessMode: &csi.VolumeCapability_AccessMode{
-						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-					},
-				},
-			},
+			VolumeContext:      req.VolumeContext,
+			VolumeCapabilities: req.VolumeCapabilities,
+			Parameters:         req.Parameters,
 		},
+	}
+
+	for _, cap := range req.VolumeCapabilities {
+		// Only confirm requests for supported mode
+		if cap.AccessMode != nil && cap.AccessMode.Mode != csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER {
+			resp.Confirmed = nil
+			return resp, status.Errorf(codes.InvalidArgument, "Unsupported Access Mode: %v", cap.AccessMode)
+		}
 	}
 
 	log.Print("ValidateVolumeCapabilities: done")

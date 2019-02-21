@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -135,11 +136,19 @@ func (drv *Driver) Run() error {
 	return drv.srv.Serve(listener)
 }
 
-// List existing volumes
+// List existing volumes sorted by name
 func (drv *Driver) listCSIVolumes() []*csi.Volume {
+	// sort volume names
+	keys := make([]string, 0, len(drv.volumes))
+	for k := range drv.volumes {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// collect CSI volumes ordered by name
 	csiVolumes := []*csi.Volume{}
-	for _, vol := range drv.volumes {
-		csiVolumes = append(csiVolumes, vol.CSIVolume)
+	for _, k := range keys {
+		csiVolumes = append(csiVolumes, drv.volumes[k].CSIVolume)
 	}
 	return csiVolumes
 }
