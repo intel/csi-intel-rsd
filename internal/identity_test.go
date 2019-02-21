@@ -17,7 +17,6 @@ package csirsd
 import (
 	"context"
 	"reflect"
-	"sync"
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -65,27 +64,17 @@ func TestDriver_GetPluginCapabilities(t *testing.T) {
 }
 
 func TestDriver_Probe(t *testing.T) {
-	type fields struct {
-		Mutex   sync.Mutex
-		ready   bool
-		readyMu sync.Mutex
-	}
 	tests := []struct {
 		name   string
-		fields fields
+		driver *Driver
 		want   *csi.ProbeResponse
 	}{
-		{name: "Ready", fields: fields{ready: true}, want: &csi.ProbeResponse{Ready: &wrappers.BoolValue{Value: true}}},
-		{name: "Not ready", fields: fields{ready: false}, want: &csi.ProbeResponse{Ready: &wrappers.BoolValue{Value: false}}},
+		{name: "Ready", driver: &Driver{ready: true}, want: &csi.ProbeResponse{Ready: &wrappers.BoolValue{Value: true}}},
+		{name: "Not ready", driver: &Driver{ready: false}, want: &csi.ProbeResponse{Ready: &wrappers.BoolValue{Value: false}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			drv := &Driver{
-				Mutex:   tt.fields.Mutex,
-				ready:   tt.fields.ready,
-				readyMu: tt.fields.readyMu,
-			}
-			got, err := drv.Probe(context.Background(), &csi.ProbeRequest{})
+			got, err := tt.driver.Probe(context.Background(), &csi.ProbeRequest{})
 			if err != nil {
 				t.Errorf("Driver.Probe() unexpected error: %v", err)
 				return

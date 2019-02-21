@@ -77,7 +77,7 @@ type Driver struct {
 
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain socket
-func NewDriver(ep string, rsdClient *rsd.Client) *Driver {
+func NewDriver(ep string, rsdClient rsd.Transport) *Driver {
 	return &Driver{
 		endpoint:  ep,
 		rsdClient: rsdClient,
@@ -228,7 +228,7 @@ func (drv *Driver) deleteVolume(volumeID string) error {
 		// delete RSD volume
 		err := vol.RSDVolume.Delete(drv.rsdClient)
 		if err != nil {
-			return fmt.Errorf("Can't delete RSD Volume %d: %v", vol.RSDVolume.ID, err)
+			return fmt.Errorf("can't delete RSD Volume %d: %v", vol.RSDVolume.ID, err)
 		}
 
 		// delete volume from the map

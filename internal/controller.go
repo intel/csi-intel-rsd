@@ -145,6 +145,19 @@ func validateCapabilities(caps []*csi.VolumeCapability) bool {
 	return true
 }
 
+func getRequiredCapacity(req *csi.CreateVolumeRequest) int64 {
+	requiredCapacity := defaultVolumeCapacity
+	if capRange := req.CapacityRange; capRange != nil {
+		if requiredBytes := capRange.GetRequiredBytes(); requiredBytes > 0 {
+			requiredCapacity = requiredBytes
+		}
+		if limitBytes := capRange.GetLimitBytes(); limitBytes > 0 {
+			requiredCapacity = limitBytes
+		}
+	}
+	return requiredCapacity
+}
+
 // CreateVolume creates new RSD Volume
 func (drv *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	if req.Name == "" {
@@ -160,15 +173,7 @@ func (drv *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeReques
 	}
 
 	// get required capacity
-	requiredCapacity := defaultVolumeCapacity
-	if capRange := req.CapacityRange; capRange != nil {
-		if requiredBytes := capRange.GetRequiredBytes(); requiredBytes > 0 {
-			requiredCapacity = requiredBytes
-		}
-		if limitBytes := capRange.GetLimitBytes(); limitBytes > 0 {
-			requiredCapacity = limitBytes
-		}
-	}
+	requiredCapacity := getRequiredCapacity(req)
 
 	// lock driver volumes to satisfy idepotency requirements
 	drv.volumesRWL.Lock()
