@@ -10,6 +10,9 @@ vet:
 	@go vet -shadow ./cmd/csirsd ./internal ./pkg/rsd 2>&1 | grep '\:' || true
 
 lint:
-	@rc=0 ; for f in $$(find -name \*.go | grep -v \.\/vendor) ; do golint -set_exit_status $$f || rc=1 ; done ; exit $$rc
+	@rc=0 ; for f in $$(find . -name \*.go | grep -v \.\/vendor) ; do golint -set_exit_status $$f || rc=1 ; done ; exit $$rc
 
-all: build fmt vet lint
+test:
+	@go test -cover ./...
+
+all: build fmt vet lint test

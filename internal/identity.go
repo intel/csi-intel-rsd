@@ -59,7 +59,7 @@ func (drv *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.Probe
 	drv.readyMu.Lock()
 	defer drv.readyMu.Unlock()
 
-	log.Printf("Probe: Ready: %b", drv.ready)
+	log.Printf("Probe: Ready: %t", drv.ready)
 
 	return &csi.ProbeResponse{
 		Ready: &wrappers.BoolValue{

@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -63,7 +64,7 @@ type Driver struct {
 	endpoint string
 	srv      *grpc.Server
 
-	rsdClient *rsd.Client
+	rsdClient rsd.Transport
 
 	volumes    map[string]*Volume
 	volumesRWL sync.RWMutex
@@ -76,7 +77,7 @@ type Driver struct {
 
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain socket
-func NewDriver(ep string, rsdClient *rsd.Client) *Driver {
+func NewDriver(ep string, rsdClient rsd.Transport) *Driver {
 	return &Driver{
 		endpoint:  ep,
 		rsdClient: rsdClient,
@@ -135,11 +136,19 @@ func (drv *Driver) Run() error {
 	return drv.srv.Serve(listener)
 }
 
-// List existing volumes
+// List existing volumes sorted by name
 func (drv *Driver) listCSIVolumes() []*csi.Volume {
+	// sort volume names
+	keys := make([]string, 0, len(drv.volumes))
+	for k := range drv.volumes {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// collect CSI volumes ordered by name
 	csiVolumes := []*csi.Volume{}
-	for _, vol := range drv.volumes {
-		csiVolumes = append(csiVolumes, vol.CSIVolume)
+	for _, k := range keys {
+		csiVolumes = append(csiVolumes, drv.volumes[k].CSIVolume)
 	}
 	return csiVolumes
 }
@@ -219,7 +228,7 @@ func (drv *Driver) deleteVolume(volumeID string) error {
 		// delete RSD volume
 		err := vol.RSDVolume.Delete(drv.rsdClient)
 		if err != nil {
-			return fmt.Errorf("Can't delete RSD Volume %s: %v", vol.RSDVolume.ID, err)
+			return fmt.Errorf("can't delete RSD Volume %d: %v", vol.RSDVolume.ID, err)
 		}
 
 		// delete volume from the map
