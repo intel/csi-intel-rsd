@@ -51,7 +51,7 @@ func (drv *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Contr
 	var caps []*csi.ControllerServiceCapability
 	for _, cap := range []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
-		//csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
+		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 		csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
 		//csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
 		//csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
@@ -192,7 +192,7 @@ func (drv *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeReques
 	// Volume doesn't exist - create new one
 	vol, err := drv.newVolume(req.Name, requiredCapacity)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, err.Error())
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	resp := &csi.CreateVolumeResponse{Volume: vol}
@@ -217,19 +217,86 @@ func (drv *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeReques
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
-// GetCapacity returns the capacity of the storage
-func (drv *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "GetCapacity is not implemented")
-}
-
 // ControllerPublishVolume attaches the given volume to the node
 func (drv *Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "ControllerPublishVolume is not implemented")
+	if req.VolumeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID is missing")
+	}
+
+	if req.NodeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "Node ID is missing")
+	}
+
+	if req.VolumeCapability == nil {
+		return nil, status.Error(codes.InvalidArgument, "Volume capability is missing")
+	}
+
+	// lock driver volumes to satisfy idepotency requirements
+	drv.volumesRWL.Lock()
+	defer drv.volumesRWL.Unlock()
+
+	// Check if the volume exists
+	name, vol := drv.findVolByID(req.VolumeId)
+	if name == "" {
+		return nil, status.Errorf(codes.NotFound, "No volume with id '%s' found", req.VolumeId)
+	}
+
+	err := drv.publishVolume(vol, req.NodeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Aborted, "error attaching volume %s(%s) to the node %s: %v", name, req.VolumeId, req.NodeId, err)
+	}
+
+	log.Printf("volume %s(%s) has been attached to the node %s", name, req.VolumeId, req.NodeId)
+
+	resp := &csi.ControllerPublishVolumeResponse{
+		PublishContext: map[string]string{
+			PublishInfoVolumeName: name,
+		},
+	}
+
+	log.Printf("publish volume response: %v", resp)
+
+	return resp, nil
+
 }
 
 // ControllerUnpublishVolume deattaches the given volume from the node
 func (drv *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "ControllerUnpublishVolume is not implemented")
+	if req.VolumeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID is missing")
+	}
+
+	if req.NodeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "Node ID is missing")
+	}
+
+	// lock driver volumes to satisfy idepotency requirements
+	drv.volumesRWL.Lock()
+	defer drv.volumesRWL.Unlock()
+
+	// Check if the volume exists
+	name, vol := drv.findVolByID(req.VolumeId)
+	if name == "" {
+		return nil, status.Errorf(codes.NotFound, "No volume with id '%s' found", req.VolumeId)
+	}
+
+	err := drv.unpublishVolume(vol, req.NodeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Aborted, "error detaching volume %s(%s) from the node %s: %v", name, req.VolumeId, req.NodeId, err)
+	}
+
+	log.Printf("volume %s(%s) has been detached from the node %s", name, req.VolumeId, req.NodeId)
+
+	resp := &csi.ControllerUnpublishVolumeResponse{}
+
+	log.Printf("unpublish volume response: %v", resp)
+
+	return resp, nil
+}
+
+// GetCapacity returns the capacity of the storage
+func (drv *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "GetCapacity is not implemented")
 }
 
 // ListSnapshots returns a list of requested volume snapshots

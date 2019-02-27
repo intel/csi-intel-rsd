@@ -39,6 +39,7 @@ func TestDriver_ControllerGetCapabilities(t *testing.T) {
 		want := &csi.ControllerGetCapabilitiesResponse{
 			Capabilities: []*csi.ControllerServiceCapability{
 				newCap(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME),
+				newCap(csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME),
 				newCap(csi.ControllerServiceCapability_RPC_LIST_VOLUMES),
 			},
 		}
@@ -440,6 +441,236 @@ func TestDriver_DeleteVolume(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Driver.DeleteVolume() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDriver_PublishVolume(t *testing.T) {
+	tests := []struct {
+		name    string
+		driver  *Driver
+		req     *csi.ControllerPublishVolumeRequest
+		want    *csi.ControllerPublishVolumeResponse
+		wantErr bool
+	}{
+		{
+			name: "Publish existing volume",
+			driver: &Driver{
+				rsdClient: &TestClient{
+					results: map[string]string{
+						"/redfish/v1/Nodes":   "{\"Members\": [{\"@odata.id\": \"/redfish/v1/Nodes/1\"}]}",
+						"/redfish/v1/Nodes/1": "{\"@odata.id\": \"/redfish/v1/Nodes/1\", \"ID\": \"1\"}",
+					},
+				},
+
+				volumes: map[string]*Volume{
+					"CSI-generated": &Volume{
+						RSDVolume: &rsd.Volume{},
+						CSIVolume: &csi.Volume{
+							VolumeId:      "1",
+							VolumeContext: map[string]string{"name": "CSI-generated"},
+							CapacityBytes: 100,
+						},
+					},
+				},
+			},
+			req: &csi.ControllerPublishVolumeRequest{
+				VolumeId: "1",
+				NodeId:   "1",
+				VolumeCapability: &csi.VolumeCapability{
+					AccessMode: &csi.VolumeCapability_AccessMode{
+						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+					},
+				},
+			},
+			want: &csi.ControllerPublishVolumeResponse{
+				PublishContext: map[string]string{
+					PublishInfoVolumeName: "CSI-generated",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "node doesn't exist",
+			driver: &Driver{
+				rsdClient: &TestClient{
+					results: map[string]string{
+						"/redfish/v1/Nodes": "{\"Members\": []}",
+					},
+				},
+				volumes: map[string]*Volume{
+					"CSI-generated": &Volume{
+						RSDVolume: &rsd.Volume{},
+						CSIVolume: &csi.Volume{
+							VolumeId:      "1",
+							VolumeContext: map[string]string{"name": "CSI-generated"},
+							CapacityBytes: 100,
+						},
+					},
+				},
+			},
+			req: &csi.ControllerPublishVolumeRequest{
+				VolumeId: "1",
+				NodeId:   "1",
+				VolumeCapability: &csi.VolumeCapability{
+					AccessMode: &csi.VolumeCapability_AccessMode{
+						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+					},
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "missing Volume Id",
+			driver:  &Driver{},
+			req:     &csi.ControllerPublishVolumeRequest{},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "missing Node Id",
+			driver:  &Driver{},
+			req:     &csi.ControllerPublishVolumeRequest{VolumeId: "1"},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "missing Volume Capabilities",
+			driver:  &Driver{},
+			req:     &csi.ControllerPublishVolumeRequest{VolumeId: "1", NodeId: "1"},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:   "volume doesn't exist",
+			driver: &Driver{},
+			req: &csi.ControllerPublishVolumeRequest{
+				VolumeId: "1",
+				NodeId:   "1",
+				VolumeCapability: &csi.VolumeCapability{
+					AccessMode: &csi.VolumeCapability_AccessMode{
+						Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+					},
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.driver.ControllerPublishVolume(context.Background(), tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Driver.PublishVolume() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Driver.PublishVolume() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDriver_UnpublishVolume(t *testing.T) {
+	tests := []struct {
+		name    string
+		driver  *Driver
+		req     *csi.ControllerUnpublishVolumeRequest
+		want    *csi.ControllerUnpublishVolumeResponse
+		wantErr bool
+	}{
+		{
+			name: "Unpublish existing volume",
+			driver: &Driver{
+				rsdClient: &TestClient{
+					results: map[string]string{
+						"/redfish/v1/Nodes":   "{\"Members\": [{\"@odata.id\": \"/redfish/v1/Nodes/1\"}]}",
+						"/redfish/v1/Nodes/1": "{\"@odata.id\": \"/redfish/v1/Nodes/1\", \"ID\": \"1\"}",
+					},
+				},
+
+				volumes: map[string]*Volume{
+					"CSI-generated": &Volume{
+						RSDVolume: &rsd.Volume{},
+						CSIVolume: &csi.Volume{
+							VolumeId:      "1",
+							VolumeContext: map[string]string{"name": "CSI-generated"},
+							CapacityBytes: 100,
+						},
+					},
+				},
+			},
+			req: &csi.ControllerUnpublishVolumeRequest{
+				VolumeId: "1",
+				NodeId:   "1",
+			},
+			want:    &csi.ControllerUnpublishVolumeResponse{},
+			wantErr: false,
+		},
+		{
+			name: "node doesn't exist",
+			driver: &Driver{
+				rsdClient: &TestClient{
+					results: map[string]string{
+						"/redfish/v1/Nodes": "{\"Members\": []}",
+					},
+				},
+				volumes: map[string]*Volume{
+					"CSI-generated": &Volume{
+						RSDVolume: &rsd.Volume{},
+						CSIVolume: &csi.Volume{
+							VolumeId:      "1",
+							VolumeContext: map[string]string{"name": "CSI-generated"},
+							CapacityBytes: 100,
+						},
+					},
+				},
+			},
+			req: &csi.ControllerUnpublishVolumeRequest{
+				VolumeId: "1",
+				NodeId:   "1",
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "missing Volume Id",
+			driver:  &Driver{},
+			req:     &csi.ControllerUnpublishVolumeRequest{},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "missing Node Id",
+			driver:  &Driver{},
+			req:     &csi.ControllerUnpublishVolumeRequest{VolumeId: "1"},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:   "volume doesn't exist",
+			driver: &Driver{},
+			req: &csi.ControllerUnpublishVolumeRequest{
+				VolumeId: "1",
+				NodeId:   "1",
+			},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.driver.ControllerUnpublishVolume(context.Background(), tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Driver.UnpublishVolume() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Driver.UnpublishVolume() = %v, want %v", got, tt.want)
 			}
 		})
 	}
