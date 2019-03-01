@@ -5,7 +5,7 @@ A Container Storage Interface ([CSI](https://github.com/container-storage-interf
 
 Requirements:
 
-* Go >= `v1.11` because dependencies are managed with [Go modules](https://github.com/golang/go/wiki/Modules)
+* Go >= `v1.12` because dependencies are managed with [Go modules](https://github.com/golang/go/wiki/Modules)
 
 Build and verify:
 
