@@ -19,7 +19,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/intel/csi-intel-rsd/internal"
+	csirsd "github.com/intel/csi-intel-rsd/internal"
 	"github.com/intel/csi-intel-rsd/pkg/rsd"
 )
 
@@ -29,15 +29,20 @@ func main() {
 	username := flag.String("username", "", "User name")
 	password := flag.String("password", "", "Password")
 	baseurl := flag.String("baseurl", "http://localhost:2443", "Redfish URL")
+	nodeID := flag.String("nodeid", "", "RSD Node id")
 	timeout := flag.Duration("timeout", 10*time.Second, "HTTP timeout")
 	flag.Parse()
+
+	if *nodeID == "" {
+		log.Fatal("nodeid mush be provided")
+	}
 
 	rsdClient, err := rsd.NewClient(*baseurl, *username, *password, *timeout)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	driver := csirsd.NewDriver(*endpoint, rsdClient)
+	driver := csirsd.NewDriver(*endpoint, *nodeID, rsdClient)
 
 	if err := driver.Run(); err != nil {
 		log.Fatalln(err)

@@ -39,18 +39,20 @@ const (
 
 	// DriverVersion defines current CSI Driver version
 	DriverVersion = "0.0.1"
+
+	// PublishInfoVolumeName is used to pass the volume name from
+	// `ControllerPublishVolume` to `NodeStageVolume or `NodePublishVolume`
+	PublishInfoVolumeName = DriverName + "/volume-name"
 )
 
 // Volume contains mapping between CSI and RSD volumes and internal driver information about a volume status
 type Volume struct {
-	CSIVolume       *csi.Volume
-	RSDVolume       *rsd.Volume
-	Name            string
-	NodeID          string
-	ISStaged        bool
-	ISPublished     bool
-	StageTargetPath string
-	TargetPath      string
+	CSIVolume   *csi.Volume
+	RSDVolume   *rsd.Volume
+	Name        string
+	RSDNodeID   string
+	ISPublished bool
+	TargetPath  string
 }
 
 // Driver implements the following CSI interfaces:
@@ -61,8 +63,9 @@ type Volume struct {
 //
 type Driver struct {
 	sync.Mutex
-	endpoint string
-	srv      *grpc.Server
+	endpoint  string
+	srv       *grpc.Server
+	RSDNodeID string
 
 	rsdClient rsd.Transport
 
@@ -77,9 +80,10 @@ type Driver struct {
 
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain socket
-func NewDriver(ep string, rsdClient rsd.Transport) *Driver {
+func NewDriver(ep string, RSDNodeID string, rsdClient rsd.Transport) *Driver {
 	return &Driver{
 		endpoint:  ep,
+		RSDNodeID: RSDNodeID,
 		rsdClient: rsdClient,
 		volumes:   map[string]*Volume{},
 	}
@@ -129,7 +133,7 @@ func (drv *Driver) Run() error {
 	drv.srv = grpc.NewServer(grpc.UnaryInterceptor(errHandler))
 	csi.RegisterIdentityServer(drv.srv, drv)
 	csi.RegisterControllerServer(drv.srv, drv)
-	//csi.RegisterNodeServer(drv.srv, drv)
+	csi.RegisterNodeServer(drv.srv, drv)
 
 	drv.ready = true
 	log.Printf("server started serving on %s", drv.endpoint)
@@ -188,13 +192,11 @@ func (drv *Driver) newVolume(name string, requiredCapacity int64) (*csi.Volume, 
 	}
 
 	drv.volumes[name] = &Volume{
-		CSIVolume:       csiVolume,
-		RSDVolume:       rsdVolume,
-		NodeID:          "",
-		ISStaged:        false,
-		ISPublished:     false,
-		StageTargetPath: "",
-		TargetPath:      "",
+		CSIVolume:   csiVolume,
+		RSDVolume:   rsdVolume,
+		RSDNodeID:   "",
+		ISPublished: false,
+		TargetPath:  "",
 	}
 
 	return csiVolume, nil
@@ -216,7 +218,7 @@ func (drv *Driver) findVolByID(volumeID string) (string, *Volume) {
 	return "", nil
 }
 
-// DeleteVolume deletes RSD volume using RSD API
+// deleteVolume deletes RSD volume using RSD API
 // and removes volume from the internal map drv.volumes
 // It does nothing if volume doesn't exist
 func (drv *Driver) deleteVolume(volumeID string) error {
@@ -234,5 +236,41 @@ func (drv *Driver) deleteVolume(volumeID string) error {
 		// delete volume from the map
 		delete(drv.volumes, name)
 	}
+	return nil
+}
+
+// publishVolume publishes volume on the node
+func (drv *Driver) publishVolume(volume *Volume, RSDNodeID string) error {
+	node, err := rsd.GetNode(drv.rsdClient, RSDNodeID)
+	if err != nil {
+		return err
+	}
+
+	// Attach RSD volume to the node
+	err = node.AttachResource(drv.rsdClient, volume.RSDVolume.OdataID)
+	if err != nil {
+		return err
+	}
+
+	volume.RSDNodeID = RSDNodeID
+	volume.ISPublished = true
+	return nil
+}
+
+// unpublishVolume unpublishes volume from the node
+func (drv *Driver) unpublishVolume(volume *Volume, RSDNodeID string) error {
+	node, err := rsd.GetNode(drv.rsdClient, RSDNodeID)
+	if err != nil {
+		return err
+	}
+
+	// Detach RSD volume to the node
+	err = node.DetachResource(drv.rsdClient, volume.RSDVolume.OdataID)
+	if err != nil {
+		return err
+	}
+
+	volume.RSDNodeID = ""
+	volume.ISPublished = false
 	return nil
 }

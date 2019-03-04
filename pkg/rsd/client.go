@@ -17,6 +17,7 @@ package rsd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -68,7 +69,7 @@ func (rsd *Client) request(entrypoint, method string, body io.Reader, result int
 		return nil, errors.Wrapf(err, "Can't get http response from %s", url)
 	}
 
-	defer resp.Body.Close()
+	defer resp.Body.Close() // nolint: errcheck
 
 	// Decode response if needed
 	if result != nil {
@@ -133,4 +134,40 @@ func GetVolumeCollection(rsd Transport, ssNum int) (*VolumeCollection, error) {
 	}
 
 	return services[ssNum].GetVolumeCollection(rsd)
+}
+
+// GetNodesCollection returns RSD NodesCollection
+func GetNodesCollection(rsd Transport) (*NodesCollection, error) {
+	var result NodesCollection
+	err := rsd.Get(NodesCollectionEntryPoint, &result)
+	if err != nil {
+		return nil, errors.Wrap(err, "Can't query NodeCollection")
+	}
+
+	return &result, err
+}
+
+// GetNode gets node by id
+func GetNode(rsd Transport, nodeID string) (*Node, error) {
+	// Get nodes collection
+	nodesCollection, err := GetNodesCollection(rsd)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get nodes
+	nodes, err := nodesCollection.GetMembers(rsd)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get node by ID
+	return func() (*Node, error) {
+		for _, node := range nodes {
+			if node.ID == nodeID {
+				return node, nil
+			}
+		}
+		return nil, fmt.Errorf("node id %s not found", nodeID)
+	}()
 }
