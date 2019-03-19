@@ -447,6 +447,82 @@ func TestDriver_DeleteVolume(t *testing.T) {
 }
 
 func TestDriver_PublishVolume(t *testing.T) {
+	testClient := &TestClient{
+		results: map[string]string{
+			"/redfish/v1/StorageServices": `{
+				"Members": [
+					{
+						"@odata.id": "/redfish/v1/StorageServices/1"
+					}
+				]
+			}`,
+			"/redfish/v1/StorageServices/1": `{
+				"Volumes": {
+					"@odata.id": "/redfish/v1/StorageServices/1/Volumes"
+				}
+			}`,
+			"/redfish/v1/StorageServices/1/Volumes": `{
+				"Members": [
+					{
+						"@odata.id": "/redfish/v1/StorageServices/1/Volumes/1"
+					}
+				]
+			}`,
+			"/redfish/v1/StorageServices/1/Volumes/1": `{
+				"Id": 1,
+				"CapacityBytes": "100",
+				"Links": {
+					"Oem": {
+						"Intel_RackScale": {
+							"Endpoints": [
+								{
+									"@odata.id": "/redfish/v1/Fabrics/1/Endpoints/nqn.1"
+								}
+							]
+						}
+					}
+				}
+			}`,
+			"/redfish/v1/Nodes": `{
+				"Members": [
+					{
+						"@odata.id": "/redfish/v1/Nodes/1"
+					}
+				]
+			}`,
+			"/redfish/v1/Nodes/1": `{
+				"@odata.id": "/redfish/v1/Nodes/1",
+				"ID": "1"
+			}`,
+			"/redfish/v1/Fabrics/1/Endpoints/nqn.1": `{
+				"IPTransportDetails": [
+					{
+						"IPv4Address": {
+							"Address": "192.168.1.1"
+						},
+						"IPv6Address": {
+							"Address": null
+						},
+						"Port": 4420,
+						"TransportProtocol": "RoCEv2"
+					}
+				],
+				"Id": "nqn.1",
+				"Identifiers": [
+					{
+						"DurableName": "nqn.1",
+						"DurableNameFormat": "NQN"
+					}
+				]
+			}`,
+		},
+	}
+
+	rsdVolume, err := rsd.GetVolume(testClient, 0, 1)
+	if err != nil {
+		t.Fatalf("can't get volume id 1: %v", err)
+	}
+
 	tests := []struct {
 		name    string
 		driver  *Driver
@@ -457,16 +533,10 @@ func TestDriver_PublishVolume(t *testing.T) {
 		{
 			name: "Publish existing volume",
 			driver: &Driver{
-				rsdClient: &TestClient{
-					results: map[string]string{
-						"/redfish/v1/Nodes":   "{\"Members\": [{\"@odata.id\": \"/redfish/v1/Nodes/1\"}]}",
-						"/redfish/v1/Nodes/1": "{\"@odata.id\": \"/redfish/v1/Nodes/1\", \"ID\": \"1\"}",
-					},
-				},
-
+				rsdClient: testClient,
 				volumes: map[string]*Volume{
 					"CSI-generated": &Volume{
-						RSDVolume: &rsd.Volume{},
+						RSDVolume: rsdVolume,
 						CSIVolume: &csi.Volume{
 							VolumeId:      "1",
 							VolumeContext: map[string]string{"name": "CSI-generated"},

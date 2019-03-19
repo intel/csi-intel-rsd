@@ -154,3 +154,18 @@ func (volume *Volume) Delete(rsd Transport) error {
 	}
 	return nil
 }
+
+// GetEndPoints returns List of EndPoints associated with a Volume
+func (volume *Volume) GetEndPoints(rsd Transport) ([]*EndPoint, error) {
+	var result []*EndPoint
+	for _, ep := range volume.Links.Oem.IntelRackScale.Endpoints {
+		epURL := ep.(map[string]interface{})["@odata.id"]
+		endPoint := EndPoint{}
+		err := rsd.Get(epURL.(string), &endPoint)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Can't query EndPoint %s", epURL)
+		}
+		result = append(result, &endPoint)
+	}
+	return result, nil
+}

@@ -136,6 +136,27 @@ func GetVolumeCollection(rsd Transport, ssNum int) (*VolumeCollection, error) {
 	return services[ssNum].GetVolumeCollection(rsd)
 }
 
+// GetVolume returns Volume by storage collection id and volume id
+func GetVolume(rsd Transport, ssNum, volID int) (*Volume, error) {
+	// Get Volume collection
+	volCollection, err := GetVolumeCollection(rsd, ssNum)
+	if err != nil {
+		return nil, err
+	}
+
+	volumes, err := volCollection.GetMembers(rsd)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, volume := range volumes {
+		if volume.ID == volID {
+			return volume, nil
+		}
+	}
+	return nil, fmt.Errorf("volume id %d not found", volID)
+}
+
 // GetNodesCollection returns RSD NodesCollection
 func GetNodesCollection(rsd Transport) (*NodesCollection, error) {
 	var result NodesCollection
@@ -162,12 +183,10 @@ func GetNode(rsd Transport, nodeID string) (*Node, error) {
 	}
 
 	// Get node by ID
-	return func() (*Node, error) {
-		for _, node := range nodes {
-			if node.ID == nodeID {
-				return node, nil
-			}
+	for _, node := range nodes {
+		if node.ID == nodeID {
+			return node, nil
 		}
-		return nil, fmt.Errorf("node id %s not found", nodeID)
-	}()
+	}
+	return nil, fmt.Errorf("node id %s not found", nodeID)
 }
