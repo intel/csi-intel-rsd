@@ -27,29 +27,32 @@ type EndPoint struct {
 		EntityLink struct {
 			OdataID string `json:"@odata.id"`
 		} `json:"EntityLink"`
-		EntityPciID interface{}   `json:"EntityPciId"`
-		EntityRole  string        `json:"EntityRole"`
-		Identifiers []interface{} `json:"Identifiers"`
-		Oem         struct {
+		EntityPciID interface{} `json:"EntityPciId"`
+		EntityRole  string      `json:"EntityRole"`
+		Identifiers []struct {
+			DurableNameFormat string `json:"DurableNameFormat"`
+			DurableName       string `json:"DurableName"`
+		} `json:"Identifiers"`
+		Oem struct {
 		} `json:"Oem"`
-		PciClassCode      interface{} `json:"PciClassCode"`
-		PciFunctionNumber interface{} `json:"PciFunctionNumber"`
+		PciClassCode      string `json:"PciClassCode"`
+		PciFunctionNumber int64  `json:"PciFunctionNumber"`
 	} `json:"ConnectedEntities"`
-	Description                string      `json:"Description"`
-	EndpointProtocol           string      `json:"EndpointProtocol"`
-	HostReservationMemoryBytes interface{} `json:"HostReservationMemoryBytes"`
+	Description                string `json:"Description"`
+	EndpointProtocol           string `json:"EndpointProtocol"`
+	HostReservationMemoryBytes int64  `json:"HostReservationMemoryBytes"`
 	IPTransportDetails         []struct {
 		IPv4Address struct {
-			Address       string      `json:"Address"`
-			AddressOrigin interface{} `json:"AddressOrigin"`
-			Gateway       interface{} `json:"Gateway"`
-			SubnetMask    interface{} `json:"SubnetMask"`
+			Address       string `json:"Address"`
+			AddressOrigin string `json:"AddressOrigin"`
+			Gateway       string `json:"Gateway"`
+			SubnetMask    string `json:"SubnetMask"`
 		} `json:"IPv4Address"`
 		IPv6Address struct {
-			Address       string      `json:"Address"`
-			AddressOrigin interface{} `json:"AddressOrigin"`
-			AddressState  interface{} `json:"AddressState"`
-			PrefixLength  interface{} `json:"PrefixLength"`
+			Address       string `json:"Address"`
+			AddressOrigin string `json:"AddressOrigin"`
+			AddressState  string `json:"AddressState"`
+			PrefixLength  string `json:"PrefixLength"`
 		} `json:"IPv6Address"`
 		Port              int    `json:"Port"`
 		TransportProtocol string `json:"TransportProtocol"`
@@ -79,8 +82,8 @@ type EndPoint struct {
 		IntelRackScale struct {
 			OdataType      string `json:"@odata.type"`
 			Authentication struct {
-				Password interface{} `json:"Password"`
-				Username interface{} `json:"Username"`
+				Password string `json:"Password"`
+				Username string `json:"Username"`
 			} `json:"Authentication"`
 		} `json:"Intel_RackScale"`
 	} `json:"Oem"`
