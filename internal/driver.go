@@ -61,7 +61,8 @@ type Volume struct {
 	EndPoint    *endPointInfo
 	Name        string
 	RSDNodeID   string
-	ISPublished bool
+	Device      string
+	IsPublished bool
 	IsStaged    bool
 }
 
@@ -206,10 +207,9 @@ func (drv *Driver) newVolume(name string, requiredCapacity int64) (*csi.Volume, 
 	}
 
 	drv.volumes[name] = &Volume{
-		CSIVolume:   csiVolume,
-		RSDVolume:   rsdVolume,
-		RSDNodeID:   "",
-		ISPublished: false,
+		CSIVolume: csiVolume,
+		RSDVolume: rsdVolume,
+		RSDNodeID: "",
 	}
 
 	return csiVolume, nil
@@ -314,6 +314,9 @@ func (drv *Driver) getEndPointInfo(volume *Volume) (*endPointInfo, error) {
 
 // publishVolume publishes volume on the node
 func (drv *Driver) publishVolume(volume *Volume, RSDNodeID string) error {
+	if volume.IsPublished {
+		return nil
+	}
 	node, err := rsd.GetNode(drv.rsdClient, RSDNodeID)
 	if err != nil {
 		return err
@@ -332,13 +335,16 @@ func (drv *Driver) publishVolume(volume *Volume, RSDNodeID string) error {
 	}
 
 	volume.RSDNodeID = RSDNodeID
-	volume.ISPublished = true
+	volume.IsPublished = true
 
 	return nil
 }
 
 // unpublishVolume unpublishes volume from the node
 func (drv *Driver) unpublishVolume(volume *Volume, RSDNodeID string) error {
+	if !volume.IsPublished {
+		return nil
+	}
 	node, err := rsd.GetNode(drv.rsdClient, RSDNodeID)
 	if err != nil {
 		return err
@@ -351,7 +357,7 @@ func (drv *Driver) unpublishVolume(volume *Volume, RSDNodeID string) error {
 	}
 
 	volume.RSDNodeID = ""
-	volume.ISPublished = false
+	volume.IsPublished = false
 	return nil
 }
 
@@ -363,7 +369,19 @@ func (drv *Driver) nodeStageVolume(volume *Volume, fsType, stagingTargetPath str
 	// --nqn: name for the NVMe subsystem to connect to
 	// --traddr: network address of the Controller
 	// --trsvcid: the transport service id. For transports using IP addressing (e.g. rdma) this field is the port number
+	if !volume.IsPublished {
+		return fmt.Errorf("nodeStageVolume: volume %s is not published", volume.Name)
+	}
+
+	if volume.IsStaged {
+		return nil
+	}
+
 	ep := volume.EndPoint
+	if ep == nil {
+		return fmt.Errorf("nodeStageVolume: no endpoint found for volume %s", volume.Name)
+	}
+
 	dev, err := drv.nvme.Connect(
 		ep.transportProtocol,
 		ep.ipAddress,
@@ -398,12 +416,16 @@ func (drv *Driver) nodeStageVolume(volume *Volume, fsType, stagingTargetPath str
 		}
 	}
 
+	volume.Device = dev
 	volume.IsStaged = true
 	return nil
 }
 
 // nodeUnstageVolume unmounts the volume from the Staging Target path
 func (drv *Driver) nodeUnstageVolume(volume *Volume, stagingTargetPath string) error {
+	if !volume.IsStaged {
+		return nil
+	}
 	mounted, err := drv.mounter.IsMounted("", stagingTargetPath)
 	if err != nil {
 		return err
@@ -416,12 +438,17 @@ func (drv *Driver) nodeUnstageVolume(volume *Volume, stagingTargetPath string) e
 		}
 	}
 
+	if err = drv.nvme.Disconnect(volume.Device); err != nil {
+		return err
+	}
+
+	volume.Device = ""
 	volume.IsStaged = false
 	return nil
 }
 
 // nodePublishVolume bind-mounts Staging directory to the Target Path
-func (drv *Driver) nodePublishVolume(fsType, stagingTargetPath, targetPath string, mountOpts []string) error {
+func (drv *Driver) nodePublishVolume(volume *Volume, fsType, stagingTargetPath, targetPath string, mountOpts []string) error {
 	mounted, err := drv.mounter.IsMounted(stagingTargetPath, targetPath)
 	if err != nil {
 		return err
@@ -432,11 +459,12 @@ func (drv *Driver) nodePublishVolume(fsType, stagingTargetPath, targetPath strin
 			return err
 		}
 	}
+
 	return nil
 }
 
 // nodeUnpublishVolume unmounts the volume from the Target Path
-func (drv *Driver) nodeUnpublishVolume(targetPath string) error {
+func (drv *Driver) nodeUnpublishVolume(volume *Volume, targetPath string) error {
 	mounted, err := drv.mounter.IsMounted("", targetPath)
 	if err != nil {
 		return err
@@ -448,5 +476,6 @@ func (drv *Driver) nodeUnpublishVolume(targetPath string) error {
 			return err
 		}
 	}
+
 	return err
 }
