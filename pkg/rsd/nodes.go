@@ -44,14 +44,14 @@ type NodesCollection struct {
 
 // Node JSON payload structure
 type Node struct {
-	OdataContext string      `json:"@odata.context"`
-	OdataID      string      `json:"@odata.id"`
-	OdataType    string      `json:"@odata.type"`
-	ID           string      `json:"Id"`
-	Name         string      `json:"Name"`
-	Description  interface{} `json:"Description"`
-	UUID         string      `json:"UUID"`
-	PowerState   string      `json:"PowerState"`
+	OdataContext string `json:"@odata.context"`
+	OdataID      string `json:"@odata.id"`
+	OdataType    string `json:"@odata.type"`
+	ID           string `json:"Id"`
+	Name         string `json:"Name"`
+	Description  string `json:"Description"`
+	UUID         string `json:"UUID"`
+	PowerState   string `json:"PowerState"`
 	Status       struct {
 		State        string `json:"State"`
 		Health       string `json:"Health"`

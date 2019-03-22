@@ -70,17 +70,22 @@ type Volume struct {
 				AllocatedBytes int64 `json:"AllocatedBytes"`
 			} `json:"Data"`
 		} `json:"ProvidedCapacity"`
-		ProvidingDrives []interface{} `json:"ProvidingDrives"`
-		ProvidingPools  []interface{} `json:"ProvidingPools"`
+		ProvidingDrives []map[string]string `json:"ProvidingDrives"`
+		ProvidingPools  []map[string]string `json:"ProvidingPools"`
 	} `json:"CapacitySources"`
-	AccessCapabilities []string      `json:"AccessCapabilities"`
-	ReplicaInfos       []interface{} `json:"ReplicaInfos"`
-	Links              struct {
-		Drives []interface{} `json:"Drives"`
+	AccessCapabilities []string `json:"AccessCapabilities"`
+	ReplicaInfos       []struct {
+		ReplicaType string `json:"ReplicaType"`
+		Replica     struct {
+			OdataID string `json:"@odata.id"`
+		} `json:"Replica"`
+	} `json:"ReplicaInfos"`
+	Links struct {
+		Drives []map[string]string `json:"Drives"`
 		Oem    struct {
 			IntelRackScale struct {
-				OdataType string        `json:"@odata.type"`
-				Endpoints []interface{} `json:"Endpoints"`
+				OdataType string              `json:"@odata.type"`
+				Endpoints []map[string]string `json:"Endpoints"`
 			} `json:"Intel_RackScale"`
 		} `json:"Oem"`
 	} `json:"Links"`
@@ -92,11 +97,11 @@ type Volume struct {
 	} `json:"Operations"`
 	Oem struct {
 		IntelRackScale struct {
-			OdataType     string      `json:"@odata.type"`
-			Bootable      bool        `json:"Bootable"`
-			EraseOnDetach interface{} `json:"EraseOnDetach"`
-			Erased        bool        `json:"Erased"`
-			Image         interface{} `json:"Image"`
+			OdataType     string `json:"@odata.type"`
+			Bootable      bool   `json:"Bootable"`
+			EraseOnDetach bool   `json:"EraseOnDetach"`
+			Erased        bool   `json:"Erased"`
+			Image         string `json:"Image"`
 			Metrics       struct {
 				OdataID string `json:"@odata.id"`
 			} `json:"Metrics"`
@@ -153,4 +158,19 @@ func (volume *Volume) Delete(rsd Transport) error {
 		return errors.Wrapf(err, "Can't delete Volume %s", volume.Name)
 	}
 	return nil
+}
+
+// GetEndPoints returns List of EndPoints associated with a Volume
+func (volume *Volume) GetEndPoints(rsd Transport) ([]*EndPoint, error) {
+	var result []*EndPoint
+	for _, ep := range volume.Links.Oem.IntelRackScale.Endpoints {
+		epURL := ep["@odata.id"]
+		endPoint := EndPoint{}
+		err := rsd.Get(epURL, &endPoint)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Can't query EndPoint %s", epURL)
+		}
+		result = append(result, &endPoint)
+	}
+	return result, nil
 }
