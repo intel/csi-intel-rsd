@@ -74,12 +74,12 @@ func (drv *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolume
 		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume: Volume ID can't be empty")
 	}
 
-	if req.VolumeCapability == nil {
-		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume: Volume capability is missing")
-	}
-
 	if req.StagingTargetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume: Staging Target Path is missing")
+	}
+
+	if req.VolumeCapability == nil {
+		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume: Volume capability is missing")
 	}
 
 	// lock driver volumes to satisfy idepotency requirements
@@ -160,7 +160,17 @@ func (drv *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVo
 		options = append(options, "ro")
 	}
 
-	err := drv.nodePublishVolume(getFsType(mnt.FsType), req.StagingTargetPath, req.TargetPath, options)
+	// lock driver volumes to satisfy idepotency requirements
+	drv.volumesRWL.Lock()
+	defer drv.volumesRWL.Unlock()
+
+	// Check if the volume exists
+	name, vol := drv.findVolByID(req.VolumeId)
+	if name == "" {
+		return nil, status.Errorf(codes.NotFound, "NodePublishVolume: No volume with id '%s' found", req.VolumeId)
+	}
+
+	err := drv.nodePublishVolume(vol, getFsType(mnt.FsType), req.StagingTargetPath, req.TargetPath, options)
 	if err != nil {
 		return nil, status.Errorf(codes.Aborted, "NodePublishVolume: error publishing volume id %s on %s: %v", req.VolumeId, req.StagingTargetPath, err)
 	}
@@ -180,7 +190,17 @@ func (drv *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpubli
 		return nil, status.Error(codes.InvalidArgument, "NodeUnpublishVolume: Target Path is missing")
 	}
 
-	err := drv.nodeUnpublishVolume(req.TargetPath)
+	// lock driver volumes to satisfy idepotency requirements
+	drv.volumesRWL.Lock()
+	defer drv.volumesRWL.Unlock()
+
+	// Check if the volume exists
+	name, vol := drv.findVolByID(req.VolumeId)
+	if name == "" {
+		return nil, status.Errorf(codes.NotFound, "NodeUpublishVolume: No volume with id '%s' found", req.VolumeId)
+	}
+
+	err := drv.nodeUnpublishVolume(vol, req.TargetPath)
 	if err != nil {
 		return nil, status.Errorf(codes.Aborted, "NodeUnpublishVolume: error unpublishing volume id %s from the path %s: %v", req.VolumeId, req.TargetPath, err)
 	}

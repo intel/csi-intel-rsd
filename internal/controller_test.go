@@ -27,7 +27,7 @@ import (
 	"github.com/intel/csi-intel-rsd/pkg/rsd"
 )
 
-func TestDriver_ControllerGetCapabilities(t *testing.T) {
+func TestControllerGetCapabilities(t *testing.T) {
 	t.Run("Test ControllerGetCapabilities", func(t *testing.T) {
 		drv := &Driver{}
 		got, err := drv.ControllerGetCapabilities(context.Background(), &csi.ControllerGetCapabilitiesRequest{})
@@ -50,7 +50,7 @@ func TestDriver_ControllerGetCapabilities(t *testing.T) {
 	})
 }
 
-func TestDriver_ListVolumes(t *testing.T) {
+func TestListVolumes(t *testing.T) {
 	tests := []struct {
 		name    string
 		driver  *Driver
@@ -103,7 +103,7 @@ func TestDriver_ListVolumes(t *testing.T) {
 	}
 }
 
-func TestDriver_ValidateVolumeCapabilities(t *testing.T) {
+func TestValidateVolumeCapabilities(t *testing.T) {
 	tests := []struct {
 		name    string
 		driver  *Driver
@@ -212,7 +212,7 @@ func TestDriver_ValidateVolumeCapabilities(t *testing.T) {
 	}
 }
 
-func Test_validateCapabilities(t *testing.T) {
+func TestValidateCapabilities(t *testing.T) {
 	type args struct {
 		caps []*csi.VolumeCapability
 	}
@@ -260,7 +260,7 @@ func (client *TestClient) Delete(entrypoint string, data map[string]string, resu
 	return nil, nil
 }
 
-func TestDriver_CreateVolume(t *testing.T) {
+func TestCreateVolume(t *testing.T) {
 	tests := []struct {
 		name    string
 		driver  *Driver
@@ -397,7 +397,7 @@ func TestDriver_CreateVolume(t *testing.T) {
 	}
 }
 
-func TestDriver_DeleteVolume(t *testing.T) {
+func TestDeleteVolume(t *testing.T) {
 	tests := []struct {
 		name    string
 		driver  *Driver
@@ -446,7 +446,7 @@ func TestDriver_DeleteVolume(t *testing.T) {
 	}
 }
 
-func TestDriver_PublishVolume(t *testing.T) {
+func TestPublishVolume(t *testing.T) {
 	testClient := &TestClient{
 		results: map[string]string{
 			"/redfish/v1/StorageServices": `{
@@ -644,7 +644,7 @@ func TestDriver_PublishVolume(t *testing.T) {
 	}
 }
 
-func TestDriver_UnpublishVolume(t *testing.T) {
+func TestUnpublishVolume(t *testing.T) {
 	tests := []struct {
 		name    string
 		driver  *Driver
@@ -670,6 +670,7 @@ func TestDriver_UnpublishVolume(t *testing.T) {
 							VolumeContext: map[string]string{"name": "CSI-generated"},
 							CapacityBytes: 100,
 						},
+						IsPublished: true,
 					},
 				},
 			},
@@ -696,6 +697,7 @@ func TestDriver_UnpublishVolume(t *testing.T) {
 							VolumeContext: map[string]string{"name": "CSI-generated"},
 							CapacityBytes: 100,
 						},
+						IsPublished: true,
 					},
 				},
 			},
