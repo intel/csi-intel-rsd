@@ -16,7 +16,6 @@ package rsd
 
 import (
 	"net/url"
-	"strconv"
 
 	"github.com/pkg/errors"
 )
@@ -42,14 +41,14 @@ type Volume struct {
 	OdataType          string `json:"@odata.type"`
 	Name               string `json:"Name"`
 	Description        string `json:"Description"`
-	ID                 int    `json:"Id"`
+	ID                 string `json:"Id"`
 	Manufacturer       string `json:"Manufacturer"`
 	Model              string `json:"Model"`
 	VolumeType         string `json:"VolumeType"`
 	Encrypted          bool   `json:"Encrypted"`
 	EncryptionTypes    string `json:"EncryptionTypes"`
 	BlockSizeBytes     int    `json:"BlockSizeBytes"`
-	CapacityBytes      string `json:"CapacityBytes"`
+	CapacityBytes      int64  `json:"CapacityBytes"`
 	OptimumIOSizeBytes int    `json:"OptimumIOSizeBytes"`
 	Status             struct {
 		State  string `json:"State"`
@@ -111,7 +110,7 @@ type Volume struct {
 
 // NewVolume creates new volume
 func (collection *VolumeCollection) NewVolume(rsd Transport, capacity int64) (*Volume, error) {
-	data := map[string]string{"CapacityBytes": strconv.FormatInt(capacity, 10)}
+	data := map[string]int64{"CapacityBytes": capacity}
 	header, err := rsd.Post(collection.OdataID, data, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "Can't create new Volume")

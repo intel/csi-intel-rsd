@@ -193,17 +193,10 @@ func (drv *Driver) newVolume(name string, requiredCapacity int64) (*csi.Volume, 
 		return nil, err
 	}
 
-	strID := strconv.Itoa(rsdVolume.ID)
-
-	capacityBytes, err := strconv.ParseInt(rsdVolume.CapacityBytes, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("can't convert CapacityBytes %s to int: %v", rsdVolume.CapacityBytes, err)
-	}
-
 	csiVolume := &csi.Volume{
-		VolumeId:      strID,
+		VolumeId:      rsdVolume.ID,
 		VolumeContext: map[string]string{"name": name},
-		CapacityBytes: capacityBytes,
+		CapacityBytes: rsdVolume.CapacityBytes,
 	}
 
 	drv.volumes[name] = &Volume{
@@ -243,7 +236,7 @@ func (drv *Driver) deleteVolume(volumeID string) error {
 		// delete RSD volume
 		err := vol.RSDVolume.Delete(drv.rsdClient)
 		if err != nil {
-			return fmt.Errorf("can't delete RSD Volume %d: %v", vol.RSDVolume.ID, err)
+			return fmt.Errorf("can't delete RSD Volume %s: %v", vol.RSDVolume.ID, err)
 		}
 
 		// delete volume from the map

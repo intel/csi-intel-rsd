@@ -276,7 +276,7 @@ func TestCreateVolume(t *testing.T) {
 						"/redfish/v1/StorageServices":             "{\"Members\": [{\"@odata.id\": \"/redfish/v1/StorageServices/1\"}]}",
 						"/redfish/v1/StorageServices/1":           "{\"Volumes\": {\"@odata.id\": \"/redfish/v1/StorageServices/1/Volumes\"}}",
 						"/redfish/v1/StorageServices/1/Volumes":   "{\"Members\": [{\"@odata.id\": \"/redfish/v1/StorageServices/1/Volumes/1\"}]}",
-						"/redfish/v1/StorageServices/1/Volumes/1": "{\"Id\": 1, \"CapacityBytes\": \"100\"}",
+						"/redfish/v1/StorageServices/1/Volumes/1": "{\"Id\": \"1\", \"CapacityBytes\": 100}",
 					},
 				},
 				volumes: map[string]*Volume{},
@@ -469,8 +469,8 @@ func TestPublishVolume(t *testing.T) {
 				]
 			}`,
 			"/redfish/v1/StorageServices/1/Volumes/1": `{
-				"Id": 1,
-				"CapacityBytes": "100",
+				"Id": "1",
+				"CapacityBytes": 100,
 				"Links": {
 					"Oem": {
 						"Intel_RackScale": {
@@ -518,7 +518,7 @@ func TestPublishVolume(t *testing.T) {
 		},
 	}
 
-	rsdVolume, err := rsd.GetVolume(testClient, 0, 1)
+	rsdVolume, err := rsd.GetVolume(testClient, 0, "1")
 	if err != nil {
 		t.Fatalf("can't get volume id 1: %v", err)
 	}

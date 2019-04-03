@@ -136,7 +136,7 @@ func GetVolumeCollection(rsd Transport, ssNum int) (*VolumeCollection, error) {
 }
 
 // GetVolume returns Volume by storage collection id and volume id
-func GetVolume(rsd Transport, ssNum, volID int) (*Volume, error) {
+func GetVolume(rsd Transport, ssNum int, volID string) (*Volume, error) {
 	// Get Volume collection
 	volCollection, err := GetVolumeCollection(rsd, ssNum)
 	if err != nil {
@@ -153,7 +153,7 @@ func GetVolume(rsd Transport, ssNum, volID int) (*Volume, error) {
 			return volume, nil
 		}
 	}
-	return nil, fmt.Errorf("volume id %d not found", volID)
+	return nil, fmt.Errorf("volume id %s not found", volID)
 }
 
 // GetNodesCollection returns RSD NodesCollection
