@@ -1,0 +1,5 @@
+#!/bin/sh
+
+echo "- deploying pvc components"
+kubectl create -f storageclass.yaml
+kubectl create -f pvc.yaml

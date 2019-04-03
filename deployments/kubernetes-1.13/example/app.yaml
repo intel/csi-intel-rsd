@@ -1,0 +1,18 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: my-csi-app
+spec:
+  nodeSelector:
+    csi-driver: csi-intel-rsd
+  containers:
+    - name: csi-test-app
+      image: busybox
+      volumeMounts:
+      - mountPath: "/data"
+        name: test-csi-volume
+      command: [ "sleep", "1000000" ]
+  volumes:
+    - name: test-csi-volume
+      persistentVolumeClaim:
+        claimName: csi-intel-rsd-pvc # defined in pvs.yaml
