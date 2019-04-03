@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/pkg/errors"
 )
@@ -41,12 +40,12 @@ type Client struct {
 }
 
 // NewClient creates new RSD Client
-func NewClient(baseurl, username, password string, timeout time.Duration) (*Client, error) {
+func NewClient(baseurl, username, password string, httpClient *http.Client) (*Client, error) {
 	return &Client{
 		baseurl:    baseurl,
 		username:   username,
 		password:   password,
-		httpClient: &http.Client{Timeout: timeout},
+		httpClient: httpClient,
 	}, nil
 }
 
