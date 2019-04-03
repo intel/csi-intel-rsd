@@ -251,12 +251,12 @@ func (client *TestClient) Get(entrypoint string, result interface{}) error {
 }
 
 // Post returns correct location
-func (client *TestClient) Post(entrypoint string, data map[string]string, result interface{}) (*http.Header, error) {
+func (client *TestClient) Post(entrypoint string, data interface{}, result interface{}) (*http.Header, error) {
 	return &http.Header{"Location": []string{"/redfish/v1/StorageServices/1/Volumes/1"}}, nil
 }
 
 // Delete does nothing
-func (client *TestClient) Delete(entrypoint string, data map[string]string, result interface{}) (*http.Header, error) {
+func (client *TestClient) Delete(entrypoint string, data interface{}, result interface{}) (*http.Header, error) {
 	return nil, nil
 }
 
