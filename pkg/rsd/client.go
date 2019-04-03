@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -69,6 +70,14 @@ func (rsd *Client) request(entrypoint, method string, body io.Reader, result int
 	}
 
 	defer resp.Body.Close() // nolint: errcheck
+
+	if resp.StatusCode >= 400 {
+		respBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, errors.Wrapf(err, "HTTP error %d while requesting %s: can't read response body", resp.StatusCode, url)
+		}
+		return nil, fmt.Errorf("HTTP error %d while requesting %s: %s", resp.StatusCode, url, string(respBody))
+	}
 
 	// Decode response if needed
 	if result != nil {
