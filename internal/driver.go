@@ -141,7 +141,7 @@ func (drv *Driver) Run() error {
 	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		resp, err := handler(ctx, req)
 		if err != nil {
-			log.Fatalf("method %s failed, error: %s", info.FullMethod, err)
+			log.Printf("method %s failed, error: %s", info.FullMethod, err)
 		}
 		return resp, err
 	}
