@@ -30,7 +30,7 @@ const (
 // NVMe interface declares NVMe operations required by the RSD CSI driver
 type NVMe interface {
 	// Connect to NVMe subsystem
-	Connect(transport, traddr, traddrfamily, trsvcid, nqn string) (string, error)
+	Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn string) (string, error)
 	// Disconnect from NVMe subystem
 	Disconnect(device string) error
 }
@@ -82,14 +82,24 @@ func findNVMeDevice(nqn string) (string, error) {
 	return "", fmt.Errorf("can't found NVMe device in %s by NQN %s", sysfsDirectory, nqn)
 }
 
-func (n *nvme) Connect(transport, traddr, traddrfamily, trsvcid, nqn string) (string, error) {
-	// nvme connect --transport rdma --nqn nqn.2014-08.org.nvmexpress:uuid:157f29ff-18d2-4784-872e-cbf51bf4701a
-	//              --traddr 192.168.121.167 --trsvcid 4420
+func (n *nvme) Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn string) (string, error) {
+	// nvme connect --transport rdma --traddr 192.168.1.1 --trsvcid 4420
+	//              --nqn nqn.2014-08.org.nvmexpress:uuid:157f29ff-18d2-4784-872e-cbf51bf4701a
+	//              --hostnqn nqn.2014-08.org.nvmexpress:uuid:265524c1-de5f-4b42-93df-e2b99fe02eb4
+	//
 	// --transport: network fabric being used for a NVMe-over-Fabrics network
 	// --traddr: network address of the Controller
 	// --trsvcid: the transport service id. For transports using IP addressing (e.g. rdma) this field is the port number
-	// --nqn: name for the NVMe subsystem to connect to
-	options := []string{"connect", "--transport", transport, "--traddr", traddr, "--trsvcid", trsvcid, "--nqn", nqn}
+	// --nqn: NQN of the NVMe subsystem to connect to (volume entry point NQN in this case)
+	// --hostnqn: NQN of the host (computer system NQN in this case)
+	options := []string{
+		"connect",
+		"--transport", transport,
+		"--traddr", traddr,
+		"--trsvcid", trsvcid,
+		"--nqn", nqn,
+		"--hostnqn", hostnqn,
+	}
 	if err := nvmeCommand(options); err != nil {
 		return "", err
 	}

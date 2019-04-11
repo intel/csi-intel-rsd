@@ -492,7 +492,21 @@ func TestPublishVolume(t *testing.T) {
 			}`,
 			"/redfish/v1/Nodes/1": `{
 				"@odata.id": "/redfish/v1/Nodes/1",
-				"ID": "1"
+				"ID": "1",
+				"Links": {
+					"ComputerSystem": {
+						"@odata.id": "/redfish/v1/Systems/265524c1-de5f-4b42-93df-e2b99fe02eb4"
+					}
+				}
+			}`,
+			"/redfish/v1/Systems/265524c1-de5f-4b42-93df-e2b99fe02eb4": `{
+				"Links": {
+					"Endpoints": [
+						{
+							"@odata.id": "/redfish/v1/Fabrics/1/Endpoints/nqn.2"
+						}
+					]
+				}
 			}`,
 			"/redfish/v1/Fabrics/1/Endpoints/nqn.1": `{
 				"IPTransportDetails": [
@@ -511,6 +525,27 @@ func TestPublishVolume(t *testing.T) {
 				"Identifiers": [
 					{
 						"DurableName": "nqn.1",
+						"DurableNameFormat": "NQN"
+					}
+				]
+			}`,
+			"/redfish/v1/Fabrics/1/Endpoints/nqn.2": `{
+				"IPTransportDetails": [
+					{
+						"IPv4Address": {
+							"Address": "192.168.1.2"
+						},
+						"IPv6Address": {
+							"Address": null
+						},
+						"Port": 4420,
+						"TransportProtocol": "RoCEv2"
+					}
+				],
+				"Id": "nqn.2",
+				"Identifiers": [
+					{
+						"DurableName": "nqn.2",
 						"DurableNameFormat": "NQN"
 					}
 				]

@@ -14,6 +14,8 @@
 
 package rsd
 
+import "strings"
+
 // EndPoint JSON payload structure
 type EndPoint struct {
 	OdataContext string `json:"@odata.context"`
@@ -94,4 +96,15 @@ type EndPoint struct {
 		HealthRollup string `json:"HealthRollup"`
 		State        string `json:"State"`
 	} `json:"Status"`
+}
+
+// GetNQN returns endpoint NQN
+func (ep *EndPoint) GetNQN() string {
+	for _, identifier := range ep.Identifiers {
+		epFormat := identifier.DurableNameFormat
+		if strings.ToUpper(epFormat) == "NQN" {
+			return identifier.DurableName
+		}
+	}
+	return ""
 }

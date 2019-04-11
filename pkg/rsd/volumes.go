@@ -83,8 +83,8 @@ type Volume struct {
 		Drives []map[string]string `json:"Drives"`
 		Oem    struct {
 			IntelRackScale struct {
-				OdataType string              `json:"@odata.type"`
-				Endpoints []map[string]string `json:"Endpoints"`
+				OdataType string            `json:"@odata.type"`
+				Endpoints []endPointOdataID `json:"Endpoints"`
 			} `json:"Intel_RackScale"`
 		} `json:"Oem"`
 	} `json:"Links"`
@@ -161,15 +161,5 @@ func (volume *Volume) Delete(rsd Transport) error {
 
 // GetEndPoints returns List of EndPoints associated with a Volume
 func (volume *Volume) GetEndPoints(rsd Transport) ([]*EndPoint, error) {
-	var result []*EndPoint
-	for _, ep := range volume.Links.Oem.IntelRackScale.Endpoints {
-		epURL := ep["@odata.id"]
-		endPoint := EndPoint{}
-		err := rsd.Get(epURL, &endPoint)
-		if err != nil {
-			return nil, errors.Wrapf(err, "Can't query EndPoint %s", epURL)
-		}
-		result = append(result, &endPoint)
-	}
-	return result, nil
+	return GetEndPoints(rsd, volume.Links.Oem.IntelRackScale.Endpoints)
 }
