@@ -56,10 +56,10 @@ type endPointInfo struct {
 
 // Volume contains mapping between CSI and RSD volumes and internal driver information about a volume status
 type Volume struct {
+	Name        string
 	CSIVolume   *csi.Volume
 	RSDVolume   *rsd.Volume
 	EndPoint    *endPointInfo
-	Name        string
 	RSDNodeID   string
 	RSDNodeNQN  string
 	Device      string
@@ -201,6 +201,7 @@ func (drv *Driver) newVolume(name string, requiredCapacity int64) (*csi.Volume, 
 	}
 
 	drv.volumes[name] = &Volume{
+		Name:      name,
 		CSIVolume: csiVolume,
 		RSDVolume: rsdVolume,
 		RSDNodeID: "",
