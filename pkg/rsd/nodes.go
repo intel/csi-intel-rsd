@@ -15,8 +15,6 @@
 package rsd
 
 import (
-	"fmt"
-
 	"github.com/pkg/errors"
 )
 
@@ -125,22 +123,26 @@ func (collection *NodesCollection) GetMembers(rsd Transport) ([]*Node, error) {
 	return result, nil
 }
 
-// AttachResource attaches resource to the node
-func (node *Node) AttachResource(rsd Transport, odataID string) error {
-	data := map[string]string{"Resource": fmt.Sprintf(`{"@odata.id": "%s"}`, odataID)}
-	_, err := rsd.Post(node.OdataID+"/Actions/ComposedNode.AttachResource", data, nil)
+// Action calls node Action
+func (node *Node) Action(rsd Transport, odataID, action string) error {
+	data := map[string]map[string]string{
+		"Resource": {
+			"@odata.id": odataID,
+		}}
+
+	_, err := rsd.Post(node.OdataID+"/Actions/"+action, data, nil)
 	if err != nil {
-		return errors.Wrapf(err, "can't attach resource %s to the node %s", odataID, node.OdataID)
+		return errors.Wrapf(err, "node %s: resource: %s: can't perform action %s", node.OdataID, odataID, action)
 	}
 	return nil
 }
 
+// AttachResource attaches resource to the node
+func (node *Node) AttachResource(rsd Transport, odataID string) error {
+	return node.Action(rsd, odataID, "ComposedNode.AttachResource")
+}
+
 // DetachResource detaches resource from the node
 func (node *Node) DetachResource(rsd Transport, odataID string) error {
-	data := map[string]string{"Resource": fmt.Sprintf(`{"@odata.id": "%s"}`, odataID)}
-	_, err := rsd.Post(node.OdataID+"Actions/ComposedNode.DetachResource", data, nil)
-	if err != nil {
-		return errors.Wrapf(err, "can't detach resource %s from the node %s", odataID, node.OdataID)
-	}
-	return nil
+	return node.Action(rsd, odataID, "ComposedNode.DetachResource")
 }
