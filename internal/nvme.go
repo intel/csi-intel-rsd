@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -54,10 +55,23 @@ func findNVMeDevice(nqn string) (string, error) {
 	}
 
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		entryPath := filepath.Join(sysfsDirectory, entry.Name())
+		realPath, err := filepath.EvalSymlinks(entryPath)
+		if err != nil {
+			return "", fmt.Errorf("can't obtain real path of %s: %+v", entryPath, err)
+		}
+
+		st, err := os.Stat(realPath)
+		if err != nil {
+			return "", fmt.Errorf("can't get %s(%s) stat info: %+v", realPath, entryPath, err)
+		}
+
+		if !st.Mode().IsDir() {
+			fmt.Printf("%s(%s) is not a directory", realPath, entryPath)
 			continue
 		}
-		subsysnqnPath := path.Join(sysfsDirectory, entry.Name(), "subsysnqn ")
+
+		subsysnqnPath := path.Join(realPath, "subsysnqn")
 		if _, err := os.Stat(subsysnqnPath); !os.IsNotExist(err) {
 			content, err := ioutil.ReadFile(subsysnqnPath)
 			if err != nil {
@@ -66,20 +80,19 @@ func findNVMeDevice(nqn string) (string, error) {
 			if strings.TrimSpace(string(content)) == strings.TrimSpace(nqn) {
 				// found volume nqn in the /sys/class/nvme/nvmeX/subsysnqn
 				// the device name should be a subdirectory started with nvmeX
-				nvmeDir := path.Join(sysfsDirectory, entry.Name())
-				nvmeEntries, err := ioutil.ReadDir(nvmeDir)
+				nvmeEntries, err := ioutil.ReadDir(entryPath)
 				if err != nil {
-					return "", fmt.Errorf("can't read sysfs nvme directory %s", nvmeDir)
+					return "", fmt.Errorf("can't read sysfs nvme directory %s", entryPath)
 				}
 				for _, nvmeEntry := range nvmeEntries {
 					if nvmeEntry.IsDir() && strings.HasPrefix(nvmeEntry.Name(), entry.Name()) {
-						return nvmeEntry.Name(), nil
+						return filepath.Join("/dev", nvmeEntry.Name()), nil
 					}
 				}
 			}
 		}
 	}
-	return "", fmt.Errorf("can't found NVMe device in %s by NQN %s", sysfsDirectory, nqn)
+	return "", fmt.Errorf("can't find NVMe device in %s by NQN %s", sysfsDirectory, nqn)
 }
 
 func (n *nvme) Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn string) (string, error) {
