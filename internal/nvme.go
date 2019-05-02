@@ -22,10 +22,13 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
 	sysfsDirectory = "/sys/class/nvme"
+	sysfsMaxDelay  = 10
+	devMaxDelay    = 10
 )
 
 // NVMe interface declares NVMe operations required by the RSD CSI driver
@@ -80,14 +83,27 @@ func findNVMeDevice(nqn string) (string, error) {
 			if strings.TrimSpace(string(content)) == strings.TrimSpace(nqn) {
 				// found volume nqn in the /sys/class/nvme/nvmeX/subsysnqn
 				// the device name should be a subdirectory started with nvmeX
-				nvmeEntries, err := ioutil.ReadDir(entryPath)
-				if err != nil {
-					return "", fmt.Errorf("can't read sysfs nvme directory %s", entryPath)
-				}
-				for _, nvmeEntry := range nvmeEntries {
-					if nvmeEntry.IsDir() && strings.HasPrefix(nvmeEntry.Name(), entry.Name()) {
-						return filepath.Join("/dev", nvmeEntry.Name()), nil
+
+				// wait for /sys/class/nvme/nvmeX/nvmeXNN to appear
+				for delay := 1; delay < sysfsMaxDelay; delay++ {
+					dentries, err := ioutil.ReadDir(entryPath)
+					if err != nil {
+						return "", fmt.Errorf("can't read sysfs directory %s: %v", entryPath, err)
 					}
+					for _, dentry := range dentries {
+						if dentry.IsDir() && strings.HasPrefix(dentry.Name(), entry.Name()) {
+							// wait for device /dev/nvmeXNN to appear
+							device := filepath.Join("/dev", dentry.Name())
+							for delay = 1; delay < devMaxDelay; delay++ {
+								if _, err = os.Stat(device); !os.IsNotExist(err) {
+									return device, nil
+								}
+								time.Sleep(time.Duration(delay) * time.Second)
+							}
+							return "", fmt.Errorf("can't find device %s", device)
+						}
+					}
+					time.Sleep(time.Duration(delay) * time.Second)
 				}
 			}
 		}
