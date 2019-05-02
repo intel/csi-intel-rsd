@@ -380,7 +380,7 @@ func (drv *Driver) unpublishVolume(volume *Volume, RSDNodeID string) error {
 		return err
 	}
 
-	// Detach RSD volume to the node
+	// Detach RSD volume from the node
 	err = node.DetachResource(drv.rsdClient, volume.RSDVolume.OdataID)
 	if err != nil {
 		return err

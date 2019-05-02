@@ -470,6 +470,7 @@ func TestPublishVolume(t *testing.T) {
 			}`,
 			"/redfish/v1/StorageServices/1/Volumes/1": `{
 				"Id": "1",
+				"@odata.id": "/redfish/v1/StorageServices/1/Volumes/1",
 				"CapacityBytes": 100,
 				"Links": {
 					"Oem": {
@@ -497,7 +498,28 @@ func TestPublishVolume(t *testing.T) {
 					"ComputerSystem": {
 						"@odata.id": "/redfish/v1/Systems/265524c1-de5f-4b42-93df-e2b99fe02eb4"
 					}
+				},
+				"Actions": {
+					"#ComposedNode.AttachResource": {
+						"target": "/redfish/v1/Nodes/1/Actions/ComposedNode.AttachResource",
+						"@Redfish.ActionInfo": "/redfish/v1/Nodes/1/Actions/AttachResourceActionInfo"
+					}
 				}
+			}`,
+			"/redfish/v1/Nodes/1/Actions/AttachResourceActionInfo": `{
+				"@odata.id": "/redfish/v1/Nodes/4/Actions/AttachResourceActionInfo",
+				"Parameters": [
+					{
+						"AllowableValues": [
+							{
+								"@odata.id": "/redfish/v1/StorageServices/1/Volumes/1"
+							},
+							{
+								"@odata.id": "/redfish/v1/StorageServices/1/Volumes/2"
+							}
+						]
+					}
+				]
 			}`,
 			"/redfish/v1/Systems/265524c1-de5f-4b42-93df-e2b99fe02eb4": `{
 				"Links": {
@@ -680,6 +702,71 @@ func TestPublishVolume(t *testing.T) {
 }
 
 func TestUnpublishVolume(t *testing.T) {
+	testClient := &TestClient{
+		results: map[string]string{
+			"/redfish/v1/StorageServices": `{
+				"Members": [
+					{
+						"@odata.id": "/redfish/v1/StorageServices/1"
+					}
+				]
+			}`,
+			"/redfish/v1/StorageServices/1": `{
+				"Volumes": {
+					"@odata.id": "/redfish/v1/StorageServices/1/Volumes"
+				}
+			}`,
+			"/redfish/v1/StorageServices/1/Volumes": `{
+				"Members": [
+					{
+						"@odata.id": "/redfish/v1/StorageServices/1/Volumes/1"
+					}
+				]
+			}`,
+			"/redfish/v1/StorageServices/1/Volumes/1": `{
+				"Id": "1",
+				"@odata.id": "/redfish/v1/StorageServices/1/Volumes/1"
+			}`,
+			"/redfish/v1/Nodes": `{
+				"Members": [
+					{
+						"@odata.id": "/redfish/v1/Nodes/1"
+					}
+				]
+			}`,
+			"/redfish/v1/Nodes/1": `{
+				"@odata.id": "/redfish/v1/Nodes/1",
+				"ID": "1",
+				"Actions": {
+					"#ComposedNode.DetachResource": {
+						"target": "/redfish/v1/Nodes/1/Actions/ComposedNode.DetachResource",
+						"@Redfish.ActionInfo": "/redfish/v1/Nodes/1/Actions/DetachResourceActionInfo"
+					}
+				}
+			}`,
+			"/redfish/v1/Nodes/1/Actions/DetachResourceActionInfo": `{
+				"@odata.id": "/redfish/v1/Nodes/4/Actions/DetachResourceActionInfo",
+				"Parameters": [
+					{
+						"AllowableValues": [
+							{
+								"@odata.id": "/redfish/v1/StorageServices/1/Volumes/1"
+							},
+							{
+								"@odata.id": "/redfish/v1/StorageServices/1/Volumes/2"
+							}
+						]
+					}
+				]
+			}`,
+		},
+	}
+
+	rsdVolume, err := rsd.GetVolume(testClient, 0, "1")
+	if err != nil {
+		t.Fatalf("can't get volume id 1: %v", err)
+	}
+
 	tests := []struct {
 		name    string
 		driver  *Driver
@@ -690,16 +777,10 @@ func TestUnpublishVolume(t *testing.T) {
 		{
 			name: "Unpublish existing volume",
 			driver: &Driver{
-				rsdClient: &TestClient{
-					results: map[string]string{
-						"/redfish/v1/Nodes":   "{\"Members\": [{\"@odata.id\": \"/redfish/v1/Nodes/1\"}]}",
-						"/redfish/v1/Nodes/1": "{\"@odata.id\": \"/redfish/v1/Nodes/1\", \"ID\": \"1\"}",
-					},
-				},
-
+				rsdClient: testClient,
 				volumes: map[string]*Volume{
 					"CSI-generated": &Volume{
-						RSDVolume: &rsd.Volume{},
+						RSDVolume: rsdVolume,
 						CSIVolume: &csi.Volume{
 							VolumeId:      "1",
 							VolumeContext: map[string]string{"name": "CSI-generated"},
