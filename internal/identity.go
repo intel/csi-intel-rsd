@@ -24,18 +24,21 @@ import (
 
 // GetPluginInfo returns metadata of the plugin
 func (drv *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
+	log.Printf("GetPluginInfo request: %v", req)
+
 	resp := &csi.GetPluginInfoResponse{
 		Name:          DriverName,
 		VendorVersion: DriverVersion,
 	}
 
-	log.Printf("get plugin info: response: %v", resp)
-
+	log.Printf("GetPluginInfo response: %v", resp)
 	return resp, nil
 }
 
 // GetPluginCapabilities returns available capabilities of the plugin
 func (drv *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
+	log.Printf("GetPluginCapabilities request: %v", req)
+
 	resp := &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{
@@ -48,22 +51,23 @@ func (drv *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPlugin
 		},
 	}
 
-	log.Printf("get plugin capabilities: response: %v", resp)
-
+	log.Printf("GetPluginCapabilities response: %v", resp)
 	return resp, nil
 }
 
 // Probe returns the health and readiness of the plugin
 func (drv *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
-	log.Print("probe called")
+	log.Printf("Probe request: %v", req)
+
 	drv.readyMu.Lock()
 	defer drv.readyMu.Unlock()
 
-	log.Printf("Probe: Ready: %t", drv.ready)
-
-	return &csi.ProbeResponse{
+	resp := &csi.ProbeResponse{
 		Ready: &wrappers.BoolValue{
 			Value: drv.ready,
 		},
-	}, nil
+	}
+
+	log.Printf("Probe response: %v", resp)
+	return resp, nil
 }

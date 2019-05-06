@@ -48,6 +48,7 @@ func newCap(cap csi.ControllerServiceCapability_RPC_Type) *csi.ControllerService
 
 // ControllerGetCapabilities returns the capabilities of the controller service.
 func (drv *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
+	log.Printf("ControllerGetCapabilities request: %v", req)
 	var caps []*csi.ControllerServiceCapability
 	for _, cap := range []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
@@ -63,13 +64,14 @@ func (drv *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Contr
 		Capabilities: caps,
 	}
 
-	log.Printf("get controller capabilities: response: %v", resp)
+	log.Printf("ControllerGetCapabilities response: %v", resp)
 
 	return resp, nil
 }
 
 // ListVolumes returns a list of available volumes created by the driver
 func (drv *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
+	log.Printf("ListVolumes request: %v", req)
 	var entries []*csi.ListVolumesResponse_Entry
 	for _, volume := range drv.listCSIVolumes() {
 		entries = append(entries,
@@ -82,11 +84,14 @@ func (drv *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest)
 
 	log.Printf("list volumes response: %v", resp)
 
+	log.Printf("ListVolumes response: %v", resp)
 	return resp, nil
 }
 
 // ValidateVolumeCapabilities checks if requested volume capabilities are supported
 func (drv *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
+	log.Printf("ValidateVolumeCapabilities request: %v", req)
+
 	if req == nil || req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID can't be empty")
 	}
@@ -117,7 +122,7 @@ func (drv *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Vali
 		}
 	}
 
-	log.Print("ValidateVolumeCapabilities: done")
+	log.Printf("ValidateVolumeCapabilities response: %v", resp)
 	return resp, nil
 }
 
@@ -160,6 +165,8 @@ func getRequiredCapacity(req *csi.CreateVolumeRequest) int64 {
 
 // CreateVolume creates new RSD Volume
 func (drv *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
+	log.Printf("CreateVolume request: %v", req)
+
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume Name can't be empty")
 	}
@@ -197,12 +204,14 @@ func (drv *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeReques
 
 	resp := &csi.CreateVolumeResponse{Volume: vol}
 
-	log.Printf("create volume response: %v", resp)
+	log.Printf("CreateVolume response: %v", resp)
 	return resp, nil
 }
 
 // DeleteVolume deletes existing RSD Volume
 func (drv *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
+	log.Printf("DeleteVolume request: %v", req)
+
 	//  If the volume is not specified, return error
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID is missing")
@@ -213,12 +222,14 @@ func (drv *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeReques
 		return nil, err
 	}
 
-	log.Printf("volume %s has been deleted", req.VolumeId)
+	log.Printf("DeleteVolume: volume %s has been deleted", req.VolumeId)
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
 // ControllerPublishVolume attaches the given volume to the node
 func (drv *Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
+	log.Printf("ControllerPublishVolume request: %v", req)
+
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID is missing")
 	}
@@ -254,14 +265,14 @@ func (drv *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Control
 		},
 	}
 
-	log.Printf("publish volume response: %v", resp)
-
+	log.Printf("ControllerPublishVolume response: %v", resp)
 	return resp, nil
-
 }
 
 // ControllerUnpublishVolume deattaches the given volume from the node
 func (drv *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
+	log.Printf("ControllerUnpublishVolume request: %v", req)
+
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID is missing")
 	}
@@ -289,8 +300,7 @@ func (drv *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Contr
 
 	resp := &csi.ControllerUnpublishVolumeResponse{}
 
-	log.Printf("unpublish volume response: %v", resp)
-
+	log.Printf("ControllerUnpublishVolume response: %v", resp)
 	return resp, nil
 }
 
