@@ -393,6 +393,28 @@ func (drv *Driver) unpublishVolume(volume *Volume, RSDNodeID string) error {
 	return nil
 }
 
+// getCapacity gets total capacity of all available RSD storage pools
+func (drv *Driver) getCapacity() (int64, error) {
+	var result int64
+
+	client := drv.rsdClient
+	poolCollection, err := rsd.GetStoragePoolCollection(client, 0)
+	if err != nil {
+		return result, err
+	}
+
+	pools, err := poolCollection.GetMembers(client)
+	if err != nil {
+		return result, err
+	}
+
+	for _, pool := range pools {
+		result += pool.Capacity.Data.GuaranteedBytes
+	}
+
+	return result, nil
+}
+
 // nodeStageVolume connects the volume to the node using nvme connect and mounts it to the Target Staging path
 func (drv *Driver) nodeStageVolume(volume *Volume, fsType, stagingTargetPath string, mountOpts []string) error {
 	if !volume.IsPublished {

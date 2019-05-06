@@ -125,8 +125,8 @@ func GetStorageServiceCollection(rsd Transport) (*StorageServiceCollection, erro
 	return &result, err
 }
 
-// GetVolumeCollection returns VolumeCollection for the storage service <ssNum>
-func GetVolumeCollection(rsd Transport, ssNum int) (*VolumeCollection, error) {
+// GetStorageService returns storage service by its index
+func GetStorageService(rsd Transport, ssNum int) (*StorageService, error) {
 	ssCollection, err := GetStorageServiceCollection(rsd)
 	if err != nil {
 		return nil, errors.Wrap(err, "Can't get storage service collection")
@@ -141,7 +141,16 @@ func GetVolumeCollection(rsd Transport, ssNum int) (*VolumeCollection, error) {
 		return nil, errors.New("No storage services found in a collection")
 	}
 
-	return services[ssNum].GetVolumeCollection(rsd)
+	return services[ssNum], nil
+}
+
+// GetVolumeCollection returns VolumeCollection for the storage service <ssNum>
+func GetVolumeCollection(rsd Transport, ssNum int) (*VolumeCollection, error) {
+	storageService, err := GetStorageService(rsd, ssNum)
+	if err != nil {
+		return nil, err
+	}
+	return storageService.GetVolumeCollection(rsd)
 }
 
 // GetVolume returns Volume by storage collection id and volume id
@@ -197,4 +206,13 @@ func GetNode(rsd Transport, nodeID string) (*Node, error) {
 		}
 	}
 	return nil, fmt.Errorf("node id %s not found", nodeID)
+}
+
+// GetStoragePoolCollection returns StoragePoolCollection for the storage service <ssNum>
+func GetStoragePoolCollection(rsd Transport, ssNum int) (*StoragePoolCollection, error) {
+	storageService, err := GetStorageService(rsd, ssNum)
+	if err != nil {
+		return nil, err
+	}
+	return storageService.GetStoragePoolCollection(rsd)
 }

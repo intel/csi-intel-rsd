@@ -55,8 +55,7 @@ func (drv *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Contr
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 		csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
-		//csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
-		//csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
+		csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 	} {
 		caps = append(caps, newCap(cap))
 	}
@@ -347,7 +346,17 @@ func (drv *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Contr
 
 // GetCapacity returns the capacity of the storage
 func (drv *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "GetCapacity is not implemented")
+	log.Printf("GetCapacity request: %v", req)
+
+	capacity, err := drv.getCapacity()
+	if err != nil {
+		return nil, status.Errorf(codes.Aborted, "error getting capacity: %v", err)
+	}
+
+	resp := &csi.GetCapacityResponse{AvailableCapacity: capacity}
+
+	log.Printf("GetCapacity response: %v", resp)
+	return resp, nil
 }
 
 // ListSnapshots returns a list of requested volume snapshots
