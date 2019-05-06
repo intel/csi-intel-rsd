@@ -252,6 +252,11 @@ func (drv *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Control
 		return nil, status.Errorf(codes.NotFound, "No volume with id '%s' found", req.VolumeId)
 	}
 
+	// Check if node ID is correct
+	if drv.RSDNodeID != req.NodeId {
+		return nil, status.Errorf(codes.NotFound, "No node with id '%s' found", req.NodeId)
+	}
+
 	err := drv.publishVolume(vol, req.NodeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Aborted, "error attaching volume %s(%s) to the node %s: %v", name, req.VolumeId, req.NodeId, err)
@@ -289,6 +294,11 @@ func (drv *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Contr
 	name, vol := drv.findVolByID(req.VolumeId)
 	if name == "" {
 		return nil, status.Errorf(codes.NotFound, "No volume with id '%s' found", req.VolumeId)
+	}
+
+	// Check if node ID is correct
+	if drv.RSDNodeID != req.NodeId {
+		return nil, status.Errorf(codes.NotFound, "No node with id '%s' found", req.NodeId)
 	}
 
 	err := drv.unpublishVolume(vol, req.NodeId)
