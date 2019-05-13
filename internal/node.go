@@ -27,6 +27,8 @@ import (
 // This is used so the CO knows where to place the workload. The result of this
 // function will be used by the CO in ControllerPublishVolume.
 func (drv *Driver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+	log.Printf("NodeGetInfo request: %v", req)
+
 	resp := &csi.NodeGetInfoResponse{NodeId: drv.RSDNodeID}
 
 	log.Printf("NodeGetInfo response: %v", resp)
@@ -35,6 +37,8 @@ func (drv *Driver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest)
 
 // NodeGetCapabilities returns the supported capabilities of the node server
 func (drv *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
+	log.Printf("NodeGetCapabilities request: %v", req)
+
 	resp := &csi.NodeGetCapabilitiesResponse{
 		Capabilities: []*csi.NodeServiceCapability{
 			&csi.NodeServiceCapability{
@@ -48,7 +52,6 @@ func (drv *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapa
 	}
 
 	log.Printf("NodeGetCapabilities response: %v", resp)
-
 	return resp, nil
 }
 
@@ -70,6 +73,8 @@ func getFsType(fsType string) string {
 // volume to a staging path. Once mounted, NodePublishVolume will make sure to
 // bindmount it to the appropriate path
 func (drv *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+	log.Printf("NodeStageVolume request: %v", req)
+
 	if req == nil || req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume: Volume ID can't be empty")
 	}
@@ -100,12 +105,13 @@ func (drv *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolume
 	}
 
 	log.Printf("NodeStageVolume: volume %s(%s) has been staged on the path %s", name, req.VolumeId, req.StagingTargetPath)
-
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
 // NodeUnstageVolume unstages the volume from the staging path
 func (drv *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
+	log.Printf("NodeUnstageVolume request: %v", req)
+
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "NodeUnstageVolume: Volume ID is missing")
 	}
@@ -130,12 +136,13 @@ func (drv *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVo
 	}
 
 	log.Printf("NodeUnstageVolume: volume %s(%s) has been unstaged from the path %s", name, req.VolumeId, req.StagingTargetPath)
-
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
 // NodePublishVolume mounts the volume mounted to the staging path to the target path
 func (drv *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+	log.Printf("NodePublishVolume request: %v", req)
+
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume: Volume ID is missing")
 	}
@@ -176,12 +183,13 @@ func (drv *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVo
 	}
 
 	log.Printf("NodePublishVolume: volume id %s has been published on the path %s", req.VolumeId, req.StagingTargetPath)
-
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
 // NodeUnpublishVolume unmounts the volume from the target path
 func (drv *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
+	log.Printf("NodeUnpublishVolume request: %v", req)
+
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "NodeUnpublishVolume: Volume ID is missing")
 	}
@@ -206,6 +214,5 @@ func (drv *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpubli
 	}
 
 	log.Printf("NodeUnpublishVolume: volume id %s has been unpublished from the target path %s", req.VolumeId, req.TargetPath)
-
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }

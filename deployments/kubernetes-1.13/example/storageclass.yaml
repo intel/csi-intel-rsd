@@ -1,0 +1,7 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-intel-rsd-sc
+provisioner: csi-rsd.intel.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer

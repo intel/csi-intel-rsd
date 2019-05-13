@@ -1,0 +1,4 @@
+#!/bin/sh
+
+echo "- removing app"
+kubectl delete pod my-csi-app

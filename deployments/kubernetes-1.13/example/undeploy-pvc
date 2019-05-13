@@ -1,0 +1,5 @@
+#!/bin/sh
+
+echo "- removing persistent volume clame"
+kubectl delete pvc csi-intel-rsd-pvc
+kubectl delete storageclass csi-intel-rsd-sc

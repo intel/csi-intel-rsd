@@ -20,17 +20,21 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
 	sysfsDirectory = "/sys/class/nvme"
+	sysfsMaxDelay  = 10
+	devMaxDelay    = 10
 )
 
 // NVMe interface declares NVMe operations required by the RSD CSI driver
 type NVMe interface {
 	// Connect to NVMe subsystem
-	Connect(transport, traddr, traddrfamily, trsvcid, nqn string) (string, error)
+	Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn string) (string, error)
 	// Disconnect from NVMe subystem
 	Disconnect(device string) error
 }
@@ -54,10 +58,23 @@ func findNVMeDevice(nqn string) (string, error) {
 	}
 
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		entryPath := filepath.Join(sysfsDirectory, entry.Name())
+		realPath, err := filepath.EvalSymlinks(entryPath)
+		if err != nil {
+			return "", fmt.Errorf("can't obtain real path of %s: %+v", entryPath, err)
+		}
+
+		st, err := os.Stat(realPath)
+		if err != nil {
+			return "", fmt.Errorf("can't get %s(%s) stat info: %+v", realPath, entryPath, err)
+		}
+
+		if !st.Mode().IsDir() {
+			fmt.Printf("%s(%s) is not a directory", realPath, entryPath)
 			continue
 		}
-		subsysnqnPath := path.Join(sysfsDirectory, entry.Name(), "subsysnqn ")
+
+		subsysnqnPath := path.Join(realPath, "subsysnqn")
 		if _, err := os.Stat(subsysnqnPath); !os.IsNotExist(err) {
 			content, err := ioutil.ReadFile(subsysnqnPath)
 			if err != nil {
@@ -66,30 +83,52 @@ func findNVMeDevice(nqn string) (string, error) {
 			if strings.TrimSpace(string(content)) == strings.TrimSpace(nqn) {
 				// found volume nqn in the /sys/class/nvme/nvmeX/subsysnqn
 				// the device name should be a subdirectory started with nvmeX
-				nvmeDir := path.Join(sysfsDirectory, entry.Name())
-				nvmeEntries, err := ioutil.ReadDir(nvmeDir)
-				if err != nil {
-					return "", fmt.Errorf("can't read sysfs nvme directory %s", nvmeDir)
-				}
-				for _, nvmeEntry := range nvmeEntries {
-					if nvmeEntry.IsDir() && strings.HasPrefix(nvmeEntry.Name(), entry.Name()) {
-						return nvmeEntry.Name(), nil
+
+				// wait for /sys/class/nvme/nvmeX/nvmeXNN to appear
+				for delay := 1; delay < sysfsMaxDelay; delay++ {
+					dentries, err := ioutil.ReadDir(entryPath)
+					if err != nil {
+						return "", fmt.Errorf("can't read sysfs directory %s: %v", entryPath, err)
 					}
+					for _, dentry := range dentries {
+						if dentry.IsDir() && strings.HasPrefix(dentry.Name(), entry.Name()) {
+							// wait for device /dev/nvmeXNN to appear
+							device := filepath.Join("/dev", dentry.Name())
+							for delay = 1; delay < devMaxDelay; delay++ {
+								if _, err = os.Stat(device); !os.IsNotExist(err) {
+									return device, nil
+								}
+								time.Sleep(time.Duration(delay) * time.Second)
+							}
+							return "", fmt.Errorf("can't find device %s", device)
+						}
+					}
+					time.Sleep(time.Duration(delay) * time.Second)
 				}
 			}
 		}
 	}
-	return "", fmt.Errorf("can't found NVMe device in %s by NQN %s", sysfsDirectory, nqn)
+	return "", fmt.Errorf("can't find NVMe device in %s by NQN %s", sysfsDirectory, nqn)
 }
 
-func (n *nvme) Connect(transport, traddr, traddrfamily, trsvcid, nqn string) (string, error) {
-	// nvme connect --transport rdma --nqn nqn.2014-08.org.nvmexpress:uuid:157f29ff-18d2-4784-872e-cbf51bf4701a
-	//              --traddr 192.168.121.167 --trsvcid 4420
+func (n *nvme) Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn string) (string, error) {
+	// nvme connect --transport rdma --traddr 192.168.1.1 --trsvcid 4420
+	//              --nqn nqn.2014-08.org.nvmexpress:uuid:157f29ff-18d2-4784-872e-cbf51bf4701a
+	//              --hostnqn nqn.2014-08.org.nvmexpress:uuid:265524c1-de5f-4b42-93df-e2b99fe02eb4
+	//
 	// --transport: network fabric being used for a NVMe-over-Fabrics network
 	// --traddr: network address of the Controller
 	// --trsvcid: the transport service id. For transports using IP addressing (e.g. rdma) this field is the port number
-	// --nqn: name for the NVMe subsystem to connect to
-	options := []string{"connect", "--transport", transport, "--traddr", traddr, "--trsvcid", trsvcid, "--nqn", nqn}
+	// --nqn: NQN of the NVMe subsystem to connect to (volume entry point NQN in this case)
+	// --hostnqn: NQN of the host (computer system NQN in this case)
+	options := []string{
+		"connect",
+		"--transport", transport,
+		"--traddr", traddr,
+		"--trsvcid", trsvcid,
+		"--nqn", nqn,
+		"--hostnqn", hostnqn,
+	}
 	if err := nvmeCommand(options); err != nil {
 		return "", err
 	}

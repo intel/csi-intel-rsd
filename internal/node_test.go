@@ -70,7 +70,7 @@ func TestNodeGetCapabilities(t *testing.T) {
 // testNVME is a mock nvme structure used to avoid calling nvme tool
 type testNVMe struct{}
 
-func (*testNVMe) Connect(transport, traddr, traddrfamily, trsvcid, nqn string) (string, error) {
+func (*testNVMe) Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn string) (string, error) {
 	return "/dev/nvme1n1", nil
 }
 

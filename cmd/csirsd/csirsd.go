@@ -15,8 +15,10 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"log"
+	"net/http"
 	"time"
 
 	csirsd "github.com/intel/csi-intel-rsd/internal"
@@ -31,13 +33,19 @@ func main() {
 	baseurl := flag.String("baseurl", "http://localhost:2443", "Redfish URL")
 	nodeID := flag.String("nodeid", "", "RSD Node id")
 	timeout := flag.Duration("timeout", 10*time.Second, "HTTP timeout")
+	insecure := flag.Bool("insecure", false, "allow connections to https RSD without certificate verification")
 	flag.Parse()
 
 	if *nodeID == "" {
 		log.Fatal("nodeid mush be provided")
 	}
 
-	rsdClient, err := rsd.NewClient(*baseurl, *username, *password, *timeout)
+	httpClient := &http.Client{Timeout: *timeout}
+	if *insecure {
+		httpClient.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	}
+
+	rsdClient, err := rsd.NewClient(*baseurl, *username, *password, httpClient)
 	if err != nil {
 		log.Fatalln(err)
 	}

@@ -19,8 +19,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
-	"time"
 
 	"github.com/pkg/errors"
 )
@@ -28,8 +28,8 @@ import (
 // Transport is an interface to communicate with RSD server
 type Transport interface {
 	Get(entrypoint string, result interface{}) error
-	Post(entrypoint string, data map[string]string, result interface{}) (*http.Header, error)
-	Delete(entrypoint string, data map[string]string, result interface{}) (*http.Header, error)
+	Post(entrypoint string, data interface{}, result interface{}) (*http.Header, error)
+	Delete(entrypoint string, data interface{}, result interface{}) (*http.Header, error)
 }
 
 // Client is a struct that interfaces with the RSD Redfish API
@@ -41,12 +41,12 @@ type Client struct {
 }
 
 // NewClient creates new RSD Client
-func NewClient(baseurl, username, password string, timeout time.Duration) (*Client, error) {
+func NewClient(baseurl, username, password string, httpClient *http.Client) (*Client, error) {
 	return &Client{
 		baseurl:    baseurl,
 		username:   username,
 		password:   password,
-		httpClient: &http.Client{Timeout: timeout},
+		httpClient: httpClient,
 	}, nil
 }
 
@@ -71,6 +71,14 @@ func (rsd *Client) request(entrypoint, method string, body io.Reader, result int
 
 	defer resp.Body.Close() // nolint: errcheck
 
+	if resp.StatusCode >= 400 {
+		respBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, errors.Wrapf(err, "HTTP error %d while requesting %s: can't read response body", resp.StatusCode, url)
+		}
+		return nil, fmt.Errorf("HTTP error %d while requesting %s: %s", resp.StatusCode, url, string(respBody))
+	}
+
 	// Decode response if needed
 	if result != nil {
 		err = json.NewDecoder(resp.Body).Decode(result)
@@ -89,7 +97,7 @@ func (rsd *Client) Get(entrypoint string, result interface{}) error {
 }
 
 // Post sends POST request to RSD endpoint and returns decoded http response
-func (rsd *Client) Post(entrypoint string, data map[string]string, result interface{}) (*http.Header, error) {
+func (rsd *Client) Post(entrypoint string, data interface{}, result interface{}) (*http.Header, error) {
 	marshalled, err := json.Marshal(data)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Can't marshal data: %v", data)
@@ -98,7 +106,7 @@ func (rsd *Client) Post(entrypoint string, data map[string]string, result interf
 }
 
 // Delete sends DELETE request to RSD endpoint
-func (rsd *Client) Delete(entrypoint string, data map[string]string, result interface{}) (*http.Header, error) {
+func (rsd *Client) Delete(entrypoint string, data interface{}, result interface{}) (*http.Header, error) {
 	marshalled, err := json.Marshal(data)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Can't marshal data: %v", data)
@@ -137,7 +145,7 @@ func GetVolumeCollection(rsd Transport, ssNum int) (*VolumeCollection, error) {
 }
 
 // GetVolume returns Volume by storage collection id and volume id
-func GetVolume(rsd Transport, ssNum, volID int) (*Volume, error) {
+func GetVolume(rsd Transport, ssNum int, volID string) (*Volume, error) {
 	// Get Volume collection
 	volCollection, err := GetVolumeCollection(rsd, ssNum)
 	if err != nil {
@@ -154,7 +162,7 @@ func GetVolume(rsd Transport, ssNum, volID int) (*Volume, error) {
 			return volume, nil
 		}
 	}
-	return nil, fmt.Errorf("volume id %d not found", volID)
+	return nil, fmt.Errorf("volume id %s not found", volID)
 }
 
 // GetNodesCollection returns RSD NodesCollection

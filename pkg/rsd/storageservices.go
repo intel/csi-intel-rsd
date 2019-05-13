@@ -42,7 +42,7 @@ type StorageService struct {
 	OdataContext string `json:"@odata.context"`
 	OdataID      string `json:"@odata.id"`
 	OdataType    string `json:"@odata.type"`
-	ID           int    `json:"Id"`
+	ID           string `json:"Id"`
 	Name         string `json:"Name"`
 	Status       struct {
 		State  string `json:"State"`

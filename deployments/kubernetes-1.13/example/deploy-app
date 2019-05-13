@@ -1,0 +1,4 @@
+#!/bin/sh
+
+echo "- deploying app"
+kubectl create -f app.yaml

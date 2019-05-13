@@ -56,11 +56,12 @@ type endPointInfo struct {
 
 // Volume contains mapping between CSI and RSD volumes and internal driver information about a volume status
 type Volume struct {
+	Name        string
 	CSIVolume   *csi.Volume
 	RSDVolume   *rsd.Volume
 	EndPoint    *endPointInfo
-	Name        string
 	RSDNodeID   string
+	RSDNodeNQN  string
 	Device      string
 	IsPublished bool
 	IsStaged    bool
@@ -140,7 +141,7 @@ func (drv *Driver) Run() error {
 	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		resp, err := handler(ctx, req)
 		if err != nil {
-			log.Fatalf("method %s failed, error: %s", info.FullMethod, err)
+			log.Printf("method %s failed, error: %s", info.FullMethod, err)
 		}
 		return resp, err
 	}
@@ -193,20 +194,14 @@ func (drv *Driver) newVolume(name string, requiredCapacity int64) (*csi.Volume, 
 		return nil, err
 	}
 
-	strID := strconv.Itoa(rsdVolume.ID)
-
-	capacityBytes, err := strconv.ParseInt(rsdVolume.CapacityBytes, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("can't convert CapacityBytes %s to int: %v", rsdVolume.CapacityBytes, err)
-	}
-
 	csiVolume := &csi.Volume{
-		VolumeId:      strID,
+		VolumeId:      rsdVolume.ID,
 		VolumeContext: map[string]string{"name": name},
-		CapacityBytes: capacityBytes,
+		CapacityBytes: rsdVolume.CapacityBytes,
 	}
 
 	drv.volumes[name] = &Volume{
+		Name:      name,
 		CSIVolume: csiVolume,
 		RSDVolume: rsdVolume,
 		RSDNodeID: "",
@@ -243,7 +238,7 @@ func (drv *Driver) deleteVolume(volumeID string) error {
 		// delete RSD volume
 		err := vol.RSDVolume.Delete(drv.rsdClient)
 		if err != nil {
-			return fmt.Errorf("can't delete RSD Volume %d: %v", vol.RSDVolume.ID, err)
+			return fmt.Errorf("can't delete RSD Volume %s: %v", vol.RSDVolume.ID, err)
 		}
 
 		// delete volume from the map
@@ -282,20 +277,15 @@ func findEndPointInfo(endPoints []*rsd.EndPoint) *endPointInfo {
 	for _, endPoint := range endPoints {
 		epi := findTransportDetails(endPoint)
 		if epi != nil {
-			for _, identifier := range endPoint.Identifiers {
-				epFormat := identifier.DurableNameFormat
-				if strings.ToUpper(epFormat) == "NQN" {
-					epi.nqn = identifier.DurableName
-					return epi
-				}
-			}
+			epi.nqn = endPoint.GetNQN()
+			return epi
 		}
 	}
 	return nil
 }
 
-// getEndPoint gets RSD EndPoint and validates it
-func (drv *Driver) getEndPointInfo(volume *Volume) (*endPointInfo, error) {
+// getVolumeEndPointInfo gets RSD EndPoint and validates it
+func (drv *Driver) getVolumeEndPointInfo(volume *Volume) (*endPointInfo, error) {
 	// Get Entry Point associated with this RSD volume
 	endPoints, err := volume.RSDVolume.GetEndPoints(drv.rsdClient)
 	if err != nil {
@@ -312,6 +302,27 @@ func (drv *Driver) getEndPointInfo(volume *Volume) (*endPointInfo, error) {
 	return epi, nil
 }
 
+// getComputerSystemNQN gets NQN of the Computer System
+func (drv *Driver) getComputerSystemNQN(computerSystem *rsd.ComputerSystem) (string, error) {
+	endPoints, err := computerSystem.GetEndPoints(drv.rsdClient)
+	if err != nil {
+		return "", err
+	}
+
+	if len(endPoints) == 0 {
+		return "", fmt.Errorf("no RSD Endpoints found for the computer system %s", computerSystem.Name)
+	}
+
+	for _, endPoint := range endPoints {
+		nqn := endPoint.GetNQN()
+		if nqn != "" {
+			return nqn, nil
+		}
+	}
+
+	return "", fmt.Errorf("no NQN found for the computer system %s", computerSystem.Name)
+}
+
 // publishVolume publishes volume on the node
 func (drv *Driver) publishVolume(volume *Volume, RSDNodeID string) error {
 	if volume.IsPublished {
@@ -322,14 +333,33 @@ func (drv *Driver) publishVolume(volume *Volume, RSDNodeID string) error {
 		return err
 	}
 
-	// Get Entry Point associated with this RSD volume
-	volume.EndPoint, err = drv.getEndPointInfo(volume)
+	// Attach RSD volume to the node
+	err = node.AttachResource(drv.rsdClient, volume.RSDVolume.OdataID)
 	if err != nil {
 		return err
 	}
 
-	// Attach RSD volume to the node
-	err = node.AttachResource(drv.rsdClient, volume.RSDVolume.OdataID)
+	// Read volume info again as volume endpoint appears only after attachment
+	volume.RSDVolume, err = rsd.GetVolume(drv.rsdClient, 0, volume.RSDVolume.ID)
+	if err != nil {
+		return err
+	}
+
+	// Get endpoint associated with this RSD volume
+	volume.EndPoint, err = drv.getVolumeEndPointInfo(volume)
+	if err != nil {
+		return err
+	}
+
+	// Get Computer System associated with the node
+	var computerSystem rsd.ComputerSystem
+	err = rsd.GetByOdataID(drv.rsdClient, node.Links.ComputerSystem.OdataID, &computerSystem)
+	if err != nil {
+		return err
+	}
+
+	// Get NQN of this Computer System
+	volume.RSDNodeNQN, err = drv.getComputerSystemNQN(&computerSystem)
 	if err != nil {
 		return err
 	}
@@ -350,25 +380,21 @@ func (drv *Driver) unpublishVolume(volume *Volume, RSDNodeID string) error {
 		return err
 	}
 
-	// Detach RSD volume to the node
+	// Detach RSD volume from the node
 	err = node.DetachResource(drv.rsdClient, volume.RSDVolume.OdataID)
 	if err != nil {
 		return err
 	}
 
+	volume.RSDNodeNQN = ""
 	volume.RSDNodeID = ""
 	volume.IsPublished = false
+
 	return nil
 }
 
 // nodeStageVolume connects the volume to the node using nvme connect and mounts it to the Target Staging path
 func (drv *Driver) nodeStageVolume(volume *Volume, fsType, stagingTargetPath string, mountOpts []string) error {
-	// nvme connect --transport rdma --nqn nqn.2014-08.org.nvmexpress:uuid:157f29ff-18d2-4784-872e-cbf51bf4701a
-	//              --traddr 192.168.121.167 --trsvcid 4420
-	// --transport: network fabric being used for a NVMe-over-Fabrics network
-	// --nqn: name for the NVMe subsystem to connect to
-	// --traddr: network address of the Controller
-	// --trsvcid: the transport service id. For transports using IP addressing (e.g. rdma) this field is the port number
 	if !volume.IsPublished {
 		return fmt.Errorf("nodeStageVolume: volume %s is not published", volume.Name)
 	}
@@ -387,7 +413,8 @@ func (drv *Driver) nodeStageVolume(volume *Volume, fsType, stagingTargetPath str
 		ep.ipAddress,
 		ep.ipAddressFamily,
 		strconv.Itoa(ep.ipPort),
-		ep.nqn)
+		ep.nqn,
+		volume.RSDNodeNQN)
 
 	if err != nil {
 		return err

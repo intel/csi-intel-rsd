@@ -16,6 +16,7 @@ package rsd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -23,6 +24,9 @@ import (
 const (
 	// NodesCollectionEntryPoint is a URL path to the RSD Nodes colection
 	NodesCollectionEntryPoint = "/redfish/v1/Nodes"
+
+	nodeActionDelay    = 10 * time.Second
+	nodeActionAttempts = 30
 )
 
 // NodesCollection JSON payload structure
@@ -40,6 +44,12 @@ type NodesCollection struct {
 		} `json:"#ComposedNodeCollection.Allocate"`
 	} `json:"Actions"`
 	OdataID string `json:"@odata.id"`
+}
+
+// ComposedNodeResource specifies ComposedNodeAttachResource and ComposedNodeDetachResource
+type ComposedNodeResource struct {
+	Target            string `json:"target"`
+	RedfishActionInfo string `json:"@Redfish.ActionInfo"`
 }
 
 // Node JSON payload structure
@@ -93,21 +103,32 @@ type Node struct {
 		ComposedNodeAssemble struct {
 			Target string `json:"target"`
 		} `json:"#ComposedNode.Assemble"`
-		ComposedNodeAttachResource struct {
-			Target            string `json:"target"`
-			RedfishActionInfo struct {
-				OdataID string `json:"@odata.id"`
-			} `json:"@Redfish.ActionInfo"`
-		} `json:"#ComposedNode.AttachResource"`
-		ComposedNodeDetachResource struct {
-			Target            string `json:"target"`
-			RedfishActionInfo struct {
-				OdataID string `json:"@odata.id"`
-			} `json:"@Redfish.ActionInfo"`
-		} `json:"#ComposedNode.DetachResource"`
+		ComposedNodeAttachResource ComposedNodeResource `json:"#ComposedNode.AttachResource"`
+		ComposedNodeDetachResource ComposedNodeResource `json:"#ComposedNode.DetachResource"`
+		ComposedNodeForceDelete    struct {
+			Target string `json:"target"`
+		} `json:"#ComposedNode.ForceDelete"`
 	} `json:"Actions"`
 	Oem struct {
 	} `json:"Oem"`
+	ClearOptaneDCPersistentMemoryOnDelete bool `json:"ClearOptaneDCPersistentMemoryOnDelete"`
+}
+
+// ActionInfo JSON payload structure
+type ActionInfo struct {
+	OdataContext string      `json:"@odata.context"`
+	OdataID      string      `json:"@odata.id"`
+	OdataType    string      `json:"@odata.type"`
+	ID           string      `json:"Id"`
+	Name         string      `json:"Name"`
+	Description  interface{} `json:"Description"`
+	Parameters   []struct {
+		Name            string        `json:"Name"`
+		Required        bool          `json:"Required"`
+		DataType        string        `json:"DataType"`
+		ObjectDataType  string        `json:"ObjectDataType"`
+		AllowableValues []interface{} `json:"AllowableValues"`
+	} `json:"Parameters"`
 }
 
 // GetMembers returns members of Nodes collection
@@ -125,22 +146,56 @@ func (collection *NodesCollection) GetMembers(rsd Transport) ([]*Node, error) {
 	return result, nil
 }
 
-// AttachResource attaches resource to the node
-func (node *Node) AttachResource(rsd Transport, odataID string) error {
-	data := map[string]string{"Resource": fmt.Sprintf(`{"@odata.id": "%s"}`, odataID)}
-	_, err := rsd.Post(node.OdataID+"/Actions/ComposedNode.AttachResource", data, nil)
+// Action calls node Action
+func (node *Node) Action(rsd Transport, odataID, action string) error {
+	data := map[string]map[string]string{
+		"Resource": {
+			"@odata.id": odataID,
+		}}
+
+	_, err := rsd.Post(action, data, nil)
 	if err != nil {
-		return errors.Wrapf(err, "can't attach resource %s to the node %s", odataID, node.OdataID)
+		return errors.Wrapf(err, "node %s: resource: %s: can't perform action %s", node.ID, odataID, action)
 	}
 	return nil
 }
 
-// DetachResource detaches resource from the node
-func (node *Node) DetachResource(rsd Transport, odataID string) error {
-	data := map[string]string{"Resource": fmt.Sprintf(`{"@odata.id": "%s"}`, odataID)}
-	_, err := rsd.Post(node.OdataID+"Actions/ComposedNode.DetachResource", data, nil)
-	if err != nil {
-		return errors.Wrapf(err, "can't detach resource %s from the node %s", odataID, node.OdataID)
+// WaitForAllowed checks if odataID is in AllowableValues in specified intervals
+func (node *Node) WaitForAllowed(rsd Transport, resourceOdataID string, actionResource ComposedNodeResource, delay time.Duration, times int) error {
+	for i := 0; i < times; i++ {
+		// Get action info
+		var actionInfo ActionInfo
+		err := GetByOdataID(rsd, actionResource.RedfishActionInfo, &actionInfo)
+		if err != nil {
+			return errors.Wrapf(err, "node %s: can't get action info %s", node.ID, actionResource.RedfishActionInfo)
+		}
+		// Check if resource is in AllowableValues
+		for _, value := range actionInfo.Parameters[0].AllowableValues {
+			val := value.(map[string]interface{})
+			if val["@odata.id"] == resourceOdataID {
+				return nil
+			}
+		}
+		time.Sleep(delay)
 	}
-	return nil
+	return fmt.Errorf("node%s: resource %s didn't apear in the AllowableValues array of %s: timeout expired", node.ID, resourceOdataID, actionResource.RedfishActionInfo)
+}
+
+// Helper to avoid code duplication in the Attach/DetachResource APIs
+func (node *Node) attachOrDetach(rsd Transport, resourceOdataID string, actionResource ComposedNodeResource) error {
+	err := node.WaitForAllowed(rsd, resourceOdataID, actionResource, nodeActionDelay, nodeActionAttempts)
+	if err != nil {
+		return err
+	}
+	return node.Action(rsd, resourceOdataID, actionResource.Target)
+}
+
+// AttachResource attaches resource to the node
+func (node *Node) AttachResource(rsd Transport, resourceOdataID string) error {
+	return node.attachOrDetach(rsd, resourceOdataID, node.Actions.ComposedNodeAttachResource)
+}
+
+// DetachResource detaches resource from the node
+func (node *Node) DetachResource(rsd Transport, resourceOdataID string) error {
+	return node.attachOrDetach(rsd, resourceOdataID, node.Actions.ComposedNodeDetachResource)
 }

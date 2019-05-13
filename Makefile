@@ -15,4 +15,7 @@ lint:
 test:
 	@go test -cover ./...
 
-all: build fmt vet lint test
+driver-image:
+	@docker build -f deployments/kubernetes-1.13/driver.Dockerfile -t csi-intel-rsd-driver:devel .
+
+all: build fmt vet lint test driver-image
