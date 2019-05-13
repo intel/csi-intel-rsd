@@ -5,25 +5,8 @@
 
 set -e
 
-image_version () {
-    yaml="$1"
-    image="$2"
-    grep "image:.*$image" "$yaml" | sed -e 's/.*:v/v/'
-}
-
-BASE_DIR=$(dirname "$0")
-PROVISIONER_RELEASE=${PROVISIONER_RELEASE:-$(image_version "${BASE_DIR}/provisioner.yaml" csi-provisioner)}
-ATTACHER_RELEASE=${ATTACHER_RELEASE:-$(image_version "${BASE_DIR}/attacher.yaml" csi-attacher)}
-INSTALL_CRD=${INSTALL_CRD:-"false"}
-
 echo "- setting label csi-driver=csi-intel-rsd"
 kubectl label node --overwrite $(hostname | tr '[:upper:]' '[:lower:]') csi-driver=csi-intel-rsd
 
-#kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-provisioner/${PROVISIONER_RELEASE}/deploy/kubernetes/rbac.yaml
-kubectl apply -f provisioner-rbac.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-csi/external-attacher/${ATTACHER_RELEASE}/deploy/kubernetes/rbac.yaml
-
-echo "- deploying plugin components"
+echo "- deploying CSI driver"
 kubectl create -f driver.yaml
-kubectl create -f provisioner.yaml
-kubectl create -f attacher.yaml
