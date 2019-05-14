@@ -98,3 +98,13 @@ func (service *StorageService) GetVolumeCollection(rsd Transport) (*VolumeCollec
 
 	return &result, nil
 }
+
+// GetStoragePoolCollection returns StoragePoolCollection assicoated with a Storage Service
+func (service *StorageService) GetStoragePoolCollection(rsd Transport) (*StoragePoolCollection, error) {
+	var result StoragePoolCollection
+	err := rsd.Get(service.StoragePools.OdataID, &result)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Can't query StorageService StoragePool Collection %s", service.StoragePools.OdataID)
+	}
+	return &result, nil
+}

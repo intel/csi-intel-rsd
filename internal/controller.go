@@ -17,6 +17,7 @@ package csirsd
 import (
 	"context"
 	"log"
+	"strconv"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -54,8 +55,7 @@ func (drv *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Contr
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 		csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
-		//csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
-		//csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
+		csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 	} {
 		caps = append(caps, newCap(cap))
 	}
@@ -72,17 +72,47 @@ func (drv *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Contr
 // ListVolumes returns a list of available volumes created by the driver
 func (drv *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	log.Printf("ListVolumes request: %v", req)
-	var entries []*csi.ListVolumesResponse_Entry
-	for _, volume := range drv.listCSIVolumes() {
-		entries = append(entries,
-			&csi.ListVolumesResponse_Entry{
-				Volume: volume,
-			})
+
+	var startingToken int
+	var err error
+	if req.StartingToken != "" {
+		startingToken, err = strconv.Atoi(req.StartingToken)
+		if err != nil {
+			return nil, status.Errorf(codes.Aborted, "can't convert startingToken %s into int32: %v", req.StartingToken, err)
+		}
 	}
 
-	resp := &csi.ListVolumesResponse{Entries: entries, NextToken: ""}
+	// lock driver volumes to satisfy idepotency requirements
+	drv.volumesRWL.Lock()
+	defer drv.volumesRWL.Unlock()
 
-	log.Printf("list volumes response: %v", resp)
+	volumes := drv.listCSIVolumes()
+	numVols := len(volumes)
+	if startingToken > numVols {
+		return nil, status.Errorf(codes.Aborted, "startingToken %d is greater than amount of volumes %d", startingToken, numVols)
+	}
+
+	numEntries := numVols - startingToken
+	var nextToken string
+	if req.MaxEntries > 0 && req.MaxEntries < int32(numEntries) {
+		numEntries = int(req.MaxEntries)
+		nextToken = strconv.Itoa(startingToken + numEntries)
+	}
+
+	var entries []*csi.ListVolumesResponse_Entry
+	for i, volume := range volumes {
+		if i >= startingToken {
+			entries = append(entries,
+				&csi.ListVolumesResponse_Entry{
+					Volume: volume,
+				})
+			if len(entries) == numEntries {
+				break
+			}
+		}
+	}
+
+	resp := &csi.ListVolumesResponse{Entries: entries, NextToken: nextToken}
 
 	log.Printf("ListVolumes response: %v", resp)
 	return resp, nil
@@ -252,6 +282,11 @@ func (drv *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Control
 		return nil, status.Errorf(codes.NotFound, "No volume with id '%s' found", req.VolumeId)
 	}
 
+	// Check if node ID is correct
+	if drv.RSDNodeID != req.NodeId {
+		return nil, status.Errorf(codes.NotFound, "No node with id '%s' found", req.NodeId)
+	}
+
 	err := drv.publishVolume(vol, req.NodeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Aborted, "error attaching volume %s(%s) to the node %s: %v", name, req.VolumeId, req.NodeId, err)
@@ -291,6 +326,11 @@ func (drv *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Contr
 		return nil, status.Errorf(codes.NotFound, "No volume with id '%s' found", req.VolumeId)
 	}
 
+	// Check if node ID is correct
+	if drv.RSDNodeID != req.NodeId {
+		return nil, status.Errorf(codes.NotFound, "No node with id '%s' found", req.NodeId)
+	}
+
 	err := drv.unpublishVolume(vol, req.NodeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Aborted, "error detaching volume %s(%s) from the node %s: %v", name, req.VolumeId, req.NodeId, err)
@@ -306,7 +346,17 @@ func (drv *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Contr
 
 // GetCapacity returns the capacity of the storage
 func (drv *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "GetCapacity is not implemented")
+	log.Printf("GetCapacity request: %v", req)
+
+	capacity, err := drv.getCapacity()
+	if err != nil {
+		return nil, status.Errorf(codes.Aborted, "error getting capacity: %v", err)
+	}
+
+	resp := &csi.GetCapacityResponse{AvailableCapacity: capacity}
+
+	log.Printf("GetCapacity response: %v", resp)
+	return resp, nil
 }
 
 // ListSnapshots returns a list of requested volume snapshots

@@ -48,6 +48,13 @@ func (drv *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapa
 					},
 				},
 			},
+			&csi.NodeServiceCapability{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+					},
+				},
+			},
 		},
 	}
 
@@ -57,7 +64,43 @@ func (drv *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapa
 
 // NodeGetVolumeStats returns the volume capacity statistics available for the given volume.
 func (drv *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "NodeGetVolumeStats is not implemented")
+	log.Printf("NodeGetVolumeStats request: %v", req)
+	if req == nil || req.VolumeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID can't be empty")
+	}
+
+	if req.VolumePath == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume Path cannot be empty")
+	}
+
+	// Check if volume path is an absolute path
+	//if !filepath.IsAbs(req.VolumePath) {
+	//	return nil, status.Error(codes.InvalidArgument, "Volume Path must be absolute")
+	//}
+
+	// Check if volume path exists
+	_, vol := drv.findVolByID(req.VolumeId)
+	if vol == nil {
+		return nil, status.Errorf(codes.NotFound, "Volume Id '%s' not found", req.VolumeId)
+	}
+
+	// Check if volume path is either stagingtarget or target path
+	_, exists := vol.TargetPaths[req.VolumePath]
+	if !exists && req.VolumePath != vol.StagingTargetPath {
+		return nil, status.Errorf(codes.NotFound, "Path '%s' is neither a staging target path nor target path for the volume '%s'", req.VolumePath, req.VolumeId)
+	}
+
+	resp := &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{
+			{
+				Total: vol.RSDVolume.CapacityBytes,
+				Unit:  csi.VolumeUsage_BYTES,
+			},
+		},
+	}
+
+	log.Printf("NodeGetVolumeStats response: %v", resp)
+	return resp, nil
 }
 
 // getFstype returns FS type considering its default value "ext4"

@@ -56,15 +56,17 @@ type endPointInfo struct {
 
 // Volume contains mapping between CSI and RSD volumes and internal driver information about a volume status
 type Volume struct {
-	Name        string
-	CSIVolume   *csi.Volume
-	RSDVolume   *rsd.Volume
-	EndPoint    *endPointInfo
-	RSDNodeID   string
-	RSDNodeNQN  string
-	Device      string
-	IsPublished bool
-	IsStaged    bool
+	Name              string
+	CSIVolume         *csi.Volume
+	RSDVolume         *rsd.Volume
+	EndPoint          *endPointInfo
+	RSDNodeID         string
+	RSDNodeNQN        string
+	Device            string
+	IsPublished       bool
+	IsStaged          bool
+	StagingTargetPath string
+	TargetPaths       map[string]bool
 }
 
 // Driver implements the following CSI interfaces:
@@ -201,10 +203,11 @@ func (drv *Driver) newVolume(name string, requiredCapacity int64) (*csi.Volume, 
 	}
 
 	drv.volumes[name] = &Volume{
-		Name:      name,
-		CSIVolume: csiVolume,
-		RSDVolume: rsdVolume,
-		RSDNodeID: "",
+		Name:        name,
+		CSIVolume:   csiVolume,
+		RSDVolume:   rsdVolume,
+		RSDNodeID:   "",
+		TargetPaths: make(map[string]bool),
 	}
 
 	return csiVolume, nil
@@ -393,6 +396,28 @@ func (drv *Driver) unpublishVolume(volume *Volume, RSDNodeID string) error {
 	return nil
 }
 
+// getCapacity gets total capacity of all available RSD storage pools
+func (drv *Driver) getCapacity() (int64, error) {
+	var result int64
+
+	client := drv.rsdClient
+	poolCollection, err := rsd.GetStoragePoolCollection(client, 0)
+	if err != nil {
+		return result, err
+	}
+
+	pools, err := poolCollection.GetMembers(client)
+	if err != nil {
+		return result, err
+	}
+
+	for _, pool := range pools {
+		result += pool.Capacity.Data.GuaranteedBytes
+	}
+
+	return result, nil
+}
+
 // nodeStageVolume connects the volume to the node using nvme connect and mounts it to the Target Staging path
 func (drv *Driver) nodeStageVolume(volume *Volume, fsType, stagingTargetPath string, mountOpts []string) error {
 	if !volume.IsPublished {
@@ -445,6 +470,8 @@ func (drv *Driver) nodeStageVolume(volume *Volume, fsType, stagingTargetPath str
 
 	volume.Device = dev
 	volume.IsStaged = true
+	volume.StagingTargetPath = stagingTargetPath
+
 	return nil
 }
 
@@ -471,6 +498,8 @@ func (drv *Driver) nodeUnstageVolume(volume *Volume, stagingTargetPath string) e
 
 	volume.Device = ""
 	volume.IsStaged = false
+	volume.StagingTargetPath = ""
+
 	return nil
 }
 
@@ -486,6 +515,8 @@ func (drv *Driver) nodePublishVolume(volume *Volume, fsType, stagingTargetPath, 
 			return err
 		}
 	}
+
+	volume.TargetPaths[targetPath] = true
 
 	return nil
 }
@@ -503,6 +534,8 @@ func (drv *Driver) nodeUnpublishVolume(volume *Volume, targetPath string) error 
 			return err
 		}
 	}
+
+	delete(volume.TargetPaths, targetPath)
 
 	return err
 }
