@@ -65,9 +65,10 @@ spec:
             - -baseurl=https://10.1.0.99:30000
             - -endpoint=$(CSI_ENDPOINT)
             - -nodeid=1
-            - -username=admin
-            - -password=admin
             - -insecure
+          envFrom:
+          - secretRef:
+              name: intel-rsd-secret
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock

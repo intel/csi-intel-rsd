@@ -19,22 +19,32 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	csirsd "github.com/intel/csi-intel-rsd/internal"
 	"github.com/intel/csi-intel-rsd/pkg/rsd"
 )
 
+const (
+	rsdUsernameEnv string = "rsd-username"
+	rsdPasswordEnv string = "rsd-password"
+)
+
 func main() {
 	// Parse command line
 	endpoint := flag.String("endpoint", "unix:///var/lib/kubelet/plugins/csi-intel-rsd.sock", "CSI endpoint")
-	username := flag.String("username", "", "User name")
-	password := flag.String("password", "", "Password")
+	username := flag.String("username", os.Getenv(rsdUsernameEnv), "RSD username")
+	password := flag.String("password", os.Getenv(rsdPasswordEnv), "RSD password")
 	baseurl := flag.String("baseurl", "http://localhost:2443", "Redfish URL")
 	nodeID := flag.String("nodeid", "", "RSD Node id")
 	timeout := flag.Duration("timeout", 10*time.Second, "HTTP timeout")
 	insecure := flag.Bool("insecure", false, "allow connections to https RSD without certificate verification")
 	flag.Parse()
+
+	// uset RSD access creds for security reasons
+	os.Unsetenv(rsdUsernameEnv)
+	os.Unsetenv(rsdPasswordEnv)
 
 	if *nodeID == "" {
 		log.Fatal("nodeid mush be provided")

@@ -13,13 +13,16 @@ Build and verify:
 $ make all
 ```
 
-Run:
+Deploy:
+
 ```
-$ ./csirsd -baseurl http://localhost:2443 -username <username> -password <password> --endpoint unix:///tmp/csirsd.sock
-2019/01/23 14:16:01 driver.go:121: server started serving on unix:///tmp/csirsd.sock
+$ kubectl create secret generic intel-rsd-secret --from-literal=rsd-username='****' --from-literal=rsd-password='******'
+$ make driver-image
+$ cd deployments/kubernetes-1.13 && ./deploy
 ```
 
 Test CSI API endpoints using [csc utility](https://github.com/rexray/gocsi/tree/master/csc):
+
 ```
 $ csc identity -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock plugin-info
 "csi.rsd.intel.com" "0.0.1"
