@@ -17,6 +17,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -24,12 +25,47 @@ import (
 
 	csirsd "github.com/intel/csi-intel-rsd/internal"
 	"github.com/intel/csi-intel-rsd/pkg/rsd"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 const (
 	rsdUsernameEnv string = "rsd-username"
 	rsdPasswordEnv string = "rsd-password"
+	kubeNodeEnv    string = "KUBE_NODE_NAME"
+	rsdNodeLabel   string = "csi.intel.com/rsd-node"
 )
+
+// Get current Kubernetes node label by name
+func getLabel(name string) (string, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return "", err
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return "", err
+	}
+
+	nodeName := os.Getenv(kubeNodeEnv)
+	if nodeName == "" {
+		return "", fmt.Errorf("environment variable %s is not set", kubeNodeEnv)
+	}
+
+	node, err := clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("can't get node %s: %v", nodeName, err)
+	}
+
+	label, exists := node.GetLabels()[name]
+	if !exists {
+		return "", fmt.Errorf("Label %s is not set for a node %s", name, nodeName)
+	}
+
+	return label, nil
+}
 
 func main() {
 	// Parse command line
@@ -46,8 +82,12 @@ func main() {
 	os.Unsetenv(rsdUsernameEnv)
 	os.Unsetenv(rsdPasswordEnv)
 
+	var err error
 	if *nodeID == "" {
-		log.Fatal("nodeid mush be provided")
+		*nodeID, err = getLabel(rsdNodeLabel)
+		if err != nil {
+			log.Fatalf("Can't get RSD node ID: %v", err)
+		}
 	}
 
 	httpClient := &http.Client{Timeout: *timeout}

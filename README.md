@@ -17,6 +17,7 @@ Deploy:
 
 ```
 $ kubectl create secret generic intel-rsd-secret --from-literal=rsd-username='****' --from-literal=rsd-password='******'
+$ kubectl label node --overwrite $(hostname | tr '[:upper:]' '[:lower:]') csi.intel.com/rsd-node=<RSD node id>
 $ make driver-image
 $ cd deployments/kubernetes-1.13 && ./deploy
 ```

@@ -30,8 +30,13 @@ spec:
         app: csi-intel-rsd-driver
     spec:
       hostNetwork: true
-      nodeSelector:
-        csi-driver: csi-intel-rsd
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: csi.intel.com/rsd-node
+                operator: Exists
       containers:
         - name: node-driver-registrar
           image: quay.io/k8scsi/csi-node-driver-registrar:v1.0.2
@@ -64,7 +69,6 @@ spec:
           args:
             - -baseurl=https://10.1.0.99:30000
             - -endpoint=$(CSI_ENDPOINT)
-            - -nodeid=1
             - -insecure
           envFrom:
           - secretRef:
