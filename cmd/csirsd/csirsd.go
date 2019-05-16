@@ -17,27 +17,77 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	csirsd "github.com/intel/csi-intel-rsd/internal"
 	"github.com/intel/csi-intel-rsd/pkg/rsd"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
+
+const (
+	rsdUsernameEnv string = "rsd-username"
+	rsdPasswordEnv string = "rsd-password"
+	kubeNodeEnv    string = "KUBE_NODE_NAME"
+	rsdNodeLabel   string = "csi.intel.com/rsd-node"
+)
+
+// Get current Kubernetes node label by name
+func getLabel(name string) (string, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return "", err
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return "", err
+	}
+
+	nodeName := os.Getenv(kubeNodeEnv)
+	if nodeName == "" {
+		return "", fmt.Errorf("environment variable %s is not set", kubeNodeEnv)
+	}
+
+	node, err := clientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("can't get node %s: %v", nodeName, err)
+	}
+
+	label, exists := node.GetLabels()[name]
+	if !exists {
+		return "", fmt.Errorf("Label %s is not set for a node %s", name, nodeName)
+	}
+
+	return label, nil
+}
 
 func main() {
 	// Parse command line
 	endpoint := flag.String("endpoint", "unix:///var/lib/kubelet/plugins/csi-intel-rsd.sock", "CSI endpoint")
-	username := flag.String("username", "", "User name")
-	password := flag.String("password", "", "Password")
+	username := flag.String("username", os.Getenv(rsdUsernameEnv), "RSD username")
+	password := flag.String("password", os.Getenv(rsdPasswordEnv), "RSD password")
 	baseurl := flag.String("baseurl", "http://localhost:2443", "Redfish URL")
 	nodeID := flag.String("nodeid", "", "RSD Node id")
 	timeout := flag.Duration("timeout", 10*time.Second, "HTTP timeout")
 	insecure := flag.Bool("insecure", false, "allow connections to https RSD without certificate verification")
 	flag.Parse()
 
+	// uset RSD access creds for security reasons
+	os.Unsetenv(rsdUsernameEnv)
+	os.Unsetenv(rsdPasswordEnv)
+
+	var err error
 	if *nodeID == "" {
-		log.Fatal("nodeid mush be provided")
+		*nodeID, err = getLabel(rsdNodeLabel)
+		if err != nil {
+			log.Fatalf("Can't get RSD node ID: %v", err)
+		}
 	}
 
 	httpClient := &http.Client{Timeout: *timeout}

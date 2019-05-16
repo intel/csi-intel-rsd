@@ -15,7 +15,9 @@
 package rsd
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -46,10 +48,15 @@ type NodesCollection struct {
 	OdataID string `json:"@odata.id"`
 }
 
-// ComposedNodeResource specifies ComposedNodeAttachResource and ComposedNodeDetachResource
+// RedfishActionInfo JSON payload structure
+type RedfishActionInfo struct {
+	OdataID string `json:"@odata.id"`
+}
+
+// ComposedNodeResource specifies ComposedNodeAttachResource and ComposedNodeDetachResource types
 type ComposedNodeResource struct {
-	Target            string `json:"target"`
-	RedfishActionInfo string `json:"@Redfish.ActionInfo"`
+	Target            string            `json:"target"`
+	RedfishActionInfo RedfishActionInfo `json:"@Redfish.ActionInfo"`
 }
 
 // Node JSON payload structure
@@ -160,12 +167,48 @@ func (node *Node) Action(rsd Transport, odataID, action string) error {
 	return nil
 }
 
+// UnmarshalJSON is a custom unmarshaler to handle type incompatibility
+// between RedfishActionInfo type in different RSD versions:
+// -----------------------
+// RedfishVersion: "1.1.0"
+// -----------------------
+// "#ComposedNode.AttachResource": {
+//    "target": "/redfish/v1/Nodes/1/Actions/ComposedNode.AttachResource",
+//    "@Redfish.ActionInfo": {
+//      "@odata.id": "/redfish/v1/Nodes/1/Actions/AttachResourceActionInfo"
+//    }
+//  }
+// -------------------------
+// "RedfishVersion": "1.5.0"
+// -------------------------
+// "#ComposedNode.AttachResource" : {
+//    "target" : "/redfish/v1/Nodes/4/Actions/ComposedNode.AttachResource",
+//    "@Redfish.ActionInfo" : "/redfish/v1/Nodes/4/Actions/AttachResourceActionInfo"
+//  },
+func (ai *RedfishActionInfo) UnmarshalJSON(data []byte) error {
+	type Alias RedfishActionInfo // avoid infinite unmarshaling loop
+	tmp := &Alias{}
+	var err error
+	if strings.Contains(string(data), "\"@odata.id\"") {
+		// RedfishActionInfo is a struct
+		err = json.Unmarshal(data, &tmp)
+	} else {
+		// RedfishActionInfo is a string
+		err = json.Unmarshal(data, &tmp.OdataID)
+	}
+	if err != nil {
+		return err
+	}
+	*ai = RedfishActionInfo(*tmp)
+	return nil
+}
+
 // WaitForAllowed checks if odataID is in AllowableValues in specified intervals
 func (node *Node) WaitForAllowed(rsd Transport, resourceOdataID string, actionResource ComposedNodeResource, delay time.Duration, times int) error {
 	for i := 0; i < times; i++ {
 		// Get action info
 		var actionInfo ActionInfo
-		err := GetByOdataID(rsd, actionResource.RedfishActionInfo, &actionInfo)
+		err := GetByOdataID(rsd, actionResource.RedfishActionInfo.OdataID, &actionInfo)
 		if err != nil {
 			return errors.Wrapf(err, "node %s: can't get action info %s", node.ID, actionResource.RedfishActionInfo)
 		}

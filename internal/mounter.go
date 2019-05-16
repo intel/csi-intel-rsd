@@ -97,19 +97,20 @@ func (m *mounter) IsFormatted(source string) (bool, error) {
 		return false, errors.New("source is not specified")
 	}
 
-	blkidCmd := "blkid"
-	_, err := exec.LookPath(blkidCmd)
+	lsblkCmd := "lsblk"
+	_, err := exec.LookPath(lsblkCmd)
 	if err != nil {
 		if err == exec.ErrNotFound {
-			return false, fmt.Errorf("%q executable not found in $PATH", blkidCmd)
+			return false, fmt.Errorf("%q executable not found in $PATH", lsblkCmd)
 		}
 		return false, err
 	}
 
-	out, err := exec.Command(blkidCmd, source).CombinedOutput()
+	lsblkArgs := []string{"-n", "-o", "FSTYPE", source}
+	out, err := exec.Command(lsblkCmd, lsblkArgs...).CombinedOutput()
 	if err != nil {
-		return false, fmt.Errorf("checking formatting failed: %v cmd: %q output: %q",
-			err, blkidCmd, string(out))
+		return false, fmt.Errorf("checking formatting failed: %v cmd: %q %s, output: %q",
+			err, lsblkCmd, strings.Join(lsblkArgs, " "), string(out))
 	}
 
 	if strings.TrimSpace(string(out)) == "" {

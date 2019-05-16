@@ -1,14 +1,8 @@
 #!/bin/sh
 
 echo "- removing csi-driver label"
-kubectl label node $(hostname | tr '[:upper:]' '[:lower:]') csi-driver-
+kubectl label node $(hostname | tr '[:upper:]' '[:lower:]') csi.intel.com/rsd-node-
 
 echo "- removing plugin components"
 kubectl delete statefulset csi-intel-rsd-driver
 kubectl delete service csi-intel-rsd-driver
-kubectl delete statefulset csi-intel-rsd-provisioner
-kubectl delete service csi-intel-rsd-provisioner
-kubectl delete statefulset csi-intel-rsd-attacher
-kubectl delete service csi-intel-rsd-attacher
-kubectl delete role external-provisioner-cfg
-kubectl delete role external-attacher-cfg

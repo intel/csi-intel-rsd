@@ -15,21 +15,26 @@
 package csirsd
 
 import (
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"os/exec"
-	"path"
-	"path/filepath"
 	"strings"
 	"time"
 )
 
 const (
-	sysfsDirectory = "/sys/class/nvme"
-	sysfsMaxDelay  = 10
-	devMaxDelay    = 10
+	devMaxDelay = 10
 )
+
+type DeviceList struct {
+	Devices []struct {
+		DevicePath string `json:"DevicePath"`
+	} `json:"Devices"`
+}
+
+type ControllerInfo struct {
+	Subnqn string `json:"subnqn"`
+}
 
 // NVMe interface declares NVMe operations required by the RSD CSI driver
 type NVMe interface {
@@ -41,74 +46,51 @@ type NVMe interface {
 
 type nvme struct{}
 
-func nvmeCommand(options []string) error {
+func nvmeCommand(options []string) ([]byte, error) {
 	out, err := exec.Command("nvme", options...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("command failed: %v, command: 'nvme %s', output: %q",
+		return nil, fmt.Errorf("command failed: %v, command: 'nvme %s', output: %q",
 			err, strings.Join(options, " "), string(out))
 	}
-	return nil
+	return out, nil
 }
 
-// findNVMeDevice scans /sys/class/nvme/ to find device by NQN
+// findNVMeDevice uses 'nvme list' and 'id-ctrl' to find device by NQN
 func findNVMeDevice(nqn string) (string, error) {
-	entries, err := ioutil.ReadDir(sysfsDirectory)
-	if err != nil {
-		return "", fmt.Errorf("can't read sysfs direcroty %s. Kernel driver not loaded?", sysfsDirectory)
-	}
+	// wait for device node to appear
+	for delay := 1; delay < devMaxDelay; delay++ {
 
-	for _, entry := range entries {
-		entryPath := filepath.Join(sysfsDirectory, entry.Name())
-		realPath, err := filepath.EvalSymlinks(entryPath)
+		out, err := nvmeCommand([]string{"list", "-o", "json"})
 		if err != nil {
-			return "", fmt.Errorf("can't obtain real path of %s: %+v", entryPath, err)
+			return "", err
 		}
 
-		st, err := os.Stat(realPath)
+		var deviceList DeviceList
+		err = json.Unmarshal(out, &deviceList)
 		if err != nil {
-			return "", fmt.Errorf("can't get %s(%s) stat info: %+v", realPath, entryPath, err)
+			return "", fmt.Errorf("Can't unmarshal 'nvme list -o json' output: %v", err)
 		}
 
-		if !st.Mode().IsDir() {
-			fmt.Printf("%s(%s) is not a directory", realPath, entryPath)
-			continue
-		}
-
-		subsysnqnPath := path.Join(realPath, "subsysnqn")
-		if _, err := os.Stat(subsysnqnPath); !os.IsNotExist(err) {
-			content, err := ioutil.ReadFile(subsysnqnPath)
+		for _, device := range deviceList.Devices {
+			out, err = nvmeCommand([]string{"id-ctrl", device.DevicePath, "-o", "json"})
 			if err != nil {
-				return "", fmt.Errorf("can't read %s: %v", subsysnqnPath, err)
+				return "", err
 			}
-			if strings.TrimSpace(string(content)) == strings.TrimSpace(nqn) {
-				// found volume nqn in the /sys/class/nvme/nvmeX/subsysnqn
-				// the device name should be a subdirectory started with nvmeX
 
-				// wait for /sys/class/nvme/nvmeX/nvmeXNN to appear
-				for delay := 1; delay < sysfsMaxDelay; delay++ {
-					dentries, err := ioutil.ReadDir(entryPath)
-					if err != nil {
-						return "", fmt.Errorf("can't read sysfs directory %s: %v", entryPath, err)
-					}
-					for _, dentry := range dentries {
-						if dentry.IsDir() && strings.HasPrefix(dentry.Name(), entry.Name()) {
-							// wait for device /dev/nvmeXNN to appear
-							device := filepath.Join("/dev", dentry.Name())
-							for delay = 1; delay < devMaxDelay; delay++ {
-								if _, err = os.Stat(device); !os.IsNotExist(err) {
-									return device, nil
-								}
-								time.Sleep(time.Duration(delay) * time.Second)
-							}
-							return "", fmt.Errorf("can't find device %s", device)
-						}
-					}
-					time.Sleep(time.Duration(delay) * time.Second)
-				}
+			var controllerInfo ControllerInfo
+			err = json.Unmarshal(out, &controllerInfo)
+			if err != nil {
+				return "", fmt.Errorf("Can't decode 'nvme id-ctrl %s -o json' output: %v", device.DevicePath, err)
+			}
+
+			if strings.TrimSpace(controllerInfo.Subnqn) == strings.TrimSpace(nqn) {
+				return device.DevicePath, nil
 			}
 		}
+		time.Sleep(time.Duration(delay) * time.Second)
 	}
-	return "", fmt.Errorf("can't find NVMe device in %s by NQN %s", sysfsDirectory, nqn)
+
+	return "", fmt.Errorf("can't find NVMe device by NQN %s", nqn)
 }
 
 func (n *nvme) Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn string) (string, error) {
@@ -129,7 +111,7 @@ func (n *nvme) Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn st
 		"--nqn", nqn,
 		"--hostnqn", hostnqn,
 	}
-	if err := nvmeCommand(options); err != nil {
+	if _, err := nvmeCommand(options); err != nil {
 		return "", err
 	}
 
@@ -139,5 +121,6 @@ func (n *nvme) Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn st
 func (n *nvme) Disconnect(device string) error {
 	// nvme disconnect --device /dev/nvme1n1
 	// --device: NVMe device
-	return nvmeCommand([]string{"disconnect", "--device", device})
+	_, err := nvmeCommand([]string{"disconnect", "--device", device})
+	return err
 }

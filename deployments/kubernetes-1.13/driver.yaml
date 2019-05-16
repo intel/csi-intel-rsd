@@ -30,6 +30,13 @@ spec:
         app: csi-intel-rsd-driver
     spec:
       hostNetwork: true
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: csi.intel.com/rsd-node
+                operator: Exists
       containers:
         - name: node-driver-registrar
           image: quay.io/k8scsi/csi-node-driver-registrar:v1.0.2
@@ -62,10 +69,10 @@ spec:
           args:
             - -baseurl=https://10.1.0.99:30000
             - -endpoint=$(CSI_ENDPOINT)
-            - -nodeid=1
-            - -username=admin
-            - -password=admin
             - -insecure
+          envFrom:
+          - secretRef:
+              name: intel-rsd-secret
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
@@ -90,6 +97,33 @@ spec:
             - mountPath: /dev
               mountPropagation: HostToContainer
               name: dev
+
+        - name: csi-provisioner
+          image: quay.io/k8scsi/csi-provisioner:v1.0.1
+          args:
+            - "--provisioner=csi-rsd.intel.com"
+            - "--csi-address=$(ADDRESS)"
+            - "--connection-timeout=15s"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          imagePullPolicy: Always
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+
+        - name: csi-attacher
+          image: quay.io/k8scsi/csi-attacher:v1.0.1
+          imagePullPolicy: Always
+          args:
+            - --v=5
+            - --csi-address=$(ADDRESS)
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+          - mountPath: /csi
+            name: socket-dir
 
       volumes:
         - hostPath:
