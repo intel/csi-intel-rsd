@@ -26,12 +26,14 @@ const (
 	devMaxDelay = 10
 )
 
+// DeviceList declares list of NVME device paths
 type DeviceList struct {
 	Devices []struct {
 		DevicePath string `json:"DevicePath"`
 	} `json:"Devices"`
 }
 
+// ControllerInfo declares only SubNQN as it's the only attribute we use
 type ControllerInfo struct {
 	Subnqn string `json:"subnqn"`
 }
@@ -93,6 +95,7 @@ func findNVMeDevice(nqn string) (string, error) {
 	return "", fmt.Errorf("can't find NVMe device by NQN %s", nqn)
 }
 
+// Connect runs 'nvme connect' command to connect volume to the node
 func (n *nvme) Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn string) (string, error) {
 	// nvme connect --transport rdma --traddr 192.168.1.1 --trsvcid 4420
 	//              --nqn nqn.2014-08.org.nvmexpress:uuid:157f29ff-18d2-4784-872e-cbf51bf4701a
@@ -118,6 +121,7 @@ func (n *nvme) Connect(transport, traddr, traddrfamily, trsvcid, nqn, hostnqn st
 	return findNVMeDevice(nqn)
 }
 
+// Disconnect disconnects nvme device from the node
 func (n *nvme) Disconnect(device string) error {
 	// nvme disconnect --device /dev/nvme1n1
 	// --device: NVMe device
