@@ -58,6 +58,13 @@ func TestNodeGetCapabilities(t *testing.T) {
 						},
 					},
 				},
+				&csi.NodeServiceCapability{
+					Type: &csi.NodeServiceCapability_Rpc{
+						Rpc: &csi.NodeServiceCapability_RPC{
+							Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+						},
+					},
+				},
 			},
 		}
 
@@ -334,6 +341,7 @@ func TestNodePublishVolume(t *testing.T) {
 						},
 						IsPublished: false,
 						IsStaged:    true,
+						TargetPaths: map[string]bool{"1": true},
 					},
 				},
 				mounter: &testMounter{},
