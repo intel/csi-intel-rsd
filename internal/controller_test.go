@@ -41,6 +41,7 @@ func TestControllerGetCapabilities(t *testing.T) {
 				newCap(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME),
 				newCap(csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME),
 				newCap(csi.ControllerServiceCapability_RPC_LIST_VOLUMES),
+				newCap(csi.ControllerServiceCapability_RPC_GET_CAPACITY),
 			},
 		}
 
@@ -591,6 +592,7 @@ func TestPublishVolume(t *testing.T) {
 			name: "Publish existing volume",
 			driver: &Driver{
 				rsdClient: testClient,
+				RSDNodeID: "1",
 				volumes: map[string]*Volume{
 					"CSI-generated": &Volume{
 						RSDVolume: rsdVolume,
@@ -778,6 +780,7 @@ func TestUnpublishVolume(t *testing.T) {
 			name: "Unpublish existing volume",
 			driver: &Driver{
 				rsdClient: testClient,
+				RSDNodeID: "1",
 				volumes: map[string]*Volume{
 					"CSI-generated": &Volume{
 						RSDVolume: rsdVolume,

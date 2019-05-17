@@ -1,8 +1,5 @@
 FROM golang:1.12.5-stretch AS build
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends make
-
 # build the driver
 ADD . /go/src/github.com/intel/csi-intel-rsd
 WORKDIR /go/src/github.com/intel/csi-intel-rsd

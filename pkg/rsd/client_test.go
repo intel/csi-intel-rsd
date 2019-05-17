@@ -49,7 +49,9 @@ func TestGetStorageServiceCollection(t *testing.T) {
 			}))
 			defer server.Close()
 
-			rsdClient, err := NewClient(server.URL, "", "", 10*time.Second)
+			httpClient := &http.Client{Timeout: 10 * time.Second}
+
+			rsdClient, err := NewClient(server.URL, "", "", httpClient)
 			if err != nil {
 				t.Fatalf("%+v", err)
 			}
