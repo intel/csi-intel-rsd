@@ -19,7 +19,7 @@ The CSI Driver for RSD NVMe is designed to run on a Kubernetes 1.13+ installed o
 The RSD set up should include at least one compute node and a pooled storage node with NVMe storage.\
 [RSD Getting Started Guide](https://www.intel.com/content/www/us/en/architecture-and-technology/rack-scale-design/software-getting-started-guide-v2-4.html)\
 [RSD Storage API Specifications](https://www.intel.com/content/www/us/en/architecture-and-technology/rack-scale-design/storage-services-api-spec-v2-4.html)\
-[RSD REference Implementation](https://www.intel.com/content/www/us/en/architecture-and-technology/rack-scale-design/architecture-spec-v2-4.html)\
+[RSD Reference Implementation](https://www.intel.com/content/www/us/en/architecture-and-technology/rack-scale-design/architecture-spec-v2-4.html)
 
 Support requests for set up and configuration of RSD should be directed to the [RSD Github repository.](https://github.com/intel/intelRSD)
 
