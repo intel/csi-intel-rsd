@@ -41,6 +41,7 @@ Support requests for set up and configuration of RSD should be directed to the [
 csi-intel-rsd driver, node-driver-registrar, csi-provisioner and csi-attacher parameters can be configured in deployments/kubernetes-1.13/driver.yaml\
 
 The following flags can be passed to the driver binary
+
 | Name      |Type| Description   |Default|
 |-----------|-----|-----------|--------------|
 |baseurl |string |Redfish URL|localhost:2443|
@@ -58,6 +59,7 @@ The driver enables usage of RSD NVMe over Fabric (NVMeoF) pooled storage in a Ku
 Kubernetes pods can then use the Persistent Volumes through PersistentVolumeClaim.
 
 Usage example can be found in the deployments/kubernetes-1.13/example directory as follows
+
 |File Name |Usage |
 |------------|----------------|
 |deploy-pvc   |shell script to create StorageClass and ParsitentVolumeClaim|
