@@ -1,100 +1,103 @@
-# csi-intel-rsd
-A Container Storage Interface ([CSI](https://github.com/container-storage-interface/spec)) Driver for [Intel® Rack Scale Design](https://www.intel.com/content/www/us/en/architecture-and-technology/rack-scale-design-overview.html)(Intel® RSD).
+# Container Storage Interface (CSI) Driver for Intel® Rack Scale Design (Intel® RSD) NVMeoF
 
-# Development
+## About
 
-Requirements:
+Container Storage Interface (CSI) Driver for Intel® Rack Scale Design (Intel® RSD) NVMe is a storage driver for container orchestrators like Kubernetes. It makes remote NVMe storage volumes shared by Intel® RSD hardware available as filesystem volumes to container applications.
+The driver communicates with Intel® RSD hardware through Redfish/Swordfish protocols to create storage volumes, list them, attach them to the RSD nodes and delete them. Linux NVMe CLI is used to create NVME over Fabric Connections between RSD compute nodes and an RSD storage subsystem.
+The  driver follows the CSI specification by listening for API requests and provisioning volumes accordingly.
 
-* Go >= `v1.12` because dependencies are managed with [Go modules](https://github.com/golang/go/wiki/Modules)
+## Prerequisites
 
-Build and verify:
+### Build
 
-```
-$ make all
-```
+This project uses Go modules to manage dependencies. It requires version 1.12 + of Go.\
+To build the container image an up to date version of Docker (18.03+) is required.
 
-Deploy:
+### Run
 
-```
-$ kubectl create secret generic intel-rsd-secret --from-literal=rsd-username='****' --from-literal=rsd-password='******'
-$ kubectl label node --overwrite $(hostname | tr '[:upper:]' '[:lower:]') csi.intel.com/rsd-node=<RSD node id>
-$ make driver-image
-$ cd deployments/kubernetes-1.13 && ./deploy
-```
+The CSI Driver for RSD NVMe is designed to run on a Kubernetes 1.13+ installed on a preconfigured RSD set up.\
+The RSD set up should include at least one compute node and a pooled storage node with NVMe storage.\
+[RSD Getting Started Guide](https://www.intel.com/content/www/us/en/architecture-and-technology/rack-scale-design/software-getting-started-guide-v2-4.html)\
+[RSD Storage API Specifications](https://www.intel.com/content/www/us/en/architecture-and-technology/rack-scale-design/storage-services-api-spec-v2-4.html)\
+[RSD Reference Implementation](https://www.intel.com/content/www/us/en/architecture-and-technology/rack-scale-design/architecture-spec-v2-4.html)
 
-Test CSI API endpoints using [csc utility](https://github.com/rexray/gocsi/tree/master/csc):
+Support requests for set up and configuration of RSD should be directed to the [RSD Github repository.](https://github.com/intel/intelRSD)
 
-```
-$ csc identity -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock plugin-info
-"csi.rsd.intel.com" "0.0.1"
+## Setup
 
-$ csc identity -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock plugin-capabilities
-CONTROLLER_SERVICE
+### Quick Start
 
-$ csc identity -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock probe
-true
+1) Clone source code:\
+```git clone https://github.intel.com/kubernetes-rsd/csi-intel-rsd```\
+2) Build the driver:\
+```cd csi-intel-rsd && make all```\
+3) Create secret for RSD username and password:\
+```kubectl create secret generic intel-rsd-secret --from-literal=rsd-username='****' --from-literal=rsd-password='******'```\
+4) Create label for RSD node id:\
+```kubectl label node --overwrite $(hostname | tr '[:upper:]' '[:lower:]') csi.intel.com/rsd-node=<RSD node id>```\
+5) Build driver image:\
+```make driver-image```\
+6) Run deployment script:\
+```cd deployments/kubernetes-1.13 && ./deploy```
 
-$ csc controller -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock get-capabilities
-&{type:CREATE_DELETE_VOLUME }
-&{type:PUBLISH_UNPUBLISH_VOLUME }
-&{type:LIST_VOLUMES }
+### Additional options
 
-# Create 2 volumes
-$ csc controller -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock create-volume test --cap SINGLE_NODE_WRITER,block --req-bytes 4194304
-"14" 4194304 "name"="test"
+csi-intel-rsd driver, node-driver-registrar, csi-provisioner and csi-attacher parameters can be configured in deployments/kubernetes-1.13/driver.yaml\
 
-$ csc controller -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock create-volume test1 --cap SINGLE_NODE_WRITER,block --req-bytes 4194304
-"15" 4194304 "name"="test1"
+The following flags can be passed to the driver binary
 
-# List them
-$ csc controller -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock list-volumes
-"14" 4194304 "name"="test"
-"15" 4194304 "name"="test1"
+| Name      |Type| Description   |Default|
+|-----------|-----|-----------|--------------|
+|baseurl |string |Redfish URL|localhost:2443|
+|endpoint|string|CSI endpoint|unix:///var/lib/kubelet/plugins/csi-intel-rsd.sock|
+|insecure| flag| Allow connections to https RSD without certificate verification|
+|nodeid|string|RSD Node ID|
+|password|string|RSD password||
+|username|string|RSD username|
+|timeout|duration|HTTP Timeout|10s
+|help|flag|Print out flag options||
 
-# Delete one of them
-$ csc controller -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock delete-volume 14
-14
+## Usage
 
-# List again
-$ csc controller -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock list-volumes
-"15" 4194304 "name"="test1"
+The driver enables usage of RSD NVMe over Fabric (NVMeoF) pooled storage in a Kubernetes cluster environment by implementing the CSI specification. RSD NVMeoF storage volumes can be used in Kubernetes pods as dynamically provisioned Persistent Volumes.\
+Kubernetes pods can then use the Persistent Volumes through PersistentVolumeClaim.
 
-# Publish
-$ csc controller -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock publish 15 --node-id 1 --cap SINGLE_NODE_WRITER,block --timeout 3m
-"15"	"csi.rsd.intel.com/volume-name"="test"
+Usage example can be found in the deployments/kubernetes-1.13/example directory as follows
 
-# Stage
-$ csc node -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock stage --staging-target-path /var/lib/kubelet/plugins/kubernetes.io/csi/pv/pvc-2f798516-6763-11e9-a6c6-5254000daeea/globalmount 15 --cap SINGLE_NODE_WRITER,mount,ext4
-15
+|File Name |Usage |
+|------------|----------------|
+|deploy-pvc   |shell script to create StorageClass and ParsitentVolumeClaim|
+|storageclass.yaml | Kubernetes StorageClass Spec|
+|pvc.yaml | ParsitentVolumeClaim spec for Kubernetes |
+|undeploy-pvc | shell script to delete StorageClass and ParsitentVolumeClaim|
+|deploy-app | shell scrpt to deploy example application pod|
+|app.yaml | example application Kubernetes Pod Spec|
+|undeploy-app | shell script to delete application pod|
 
-# Publish on the node
-$ csc node -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock publish --staging-target-path /var/lib/kubelet/plugins/kubernetes.io/csi/pv/pvc-2f798516-6763-11e9-a6c6-5254000daeea/globalmount --target-path /var/lib/kubelet/pods/37ace0a9-6763-11e9-a6c6-5254000daeea/volumes/kubernetes.io~csi/pvc-2f798516-6763-11e9-a6c6-5254000daeea/mount --cap SINGLE_NODE_WRITER,mount,ext4 15
+To deploy application user need to first run 'deploy-pvc' script to deploy the persistent volume.
 
-# Unpublish on the node
-$ csc node -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock unpublish --target-path /var/lib/kubelet/pods/37ace0a9-6763-11e9-a6c6-5254000daeea/volumes/kubernetes.io~csi/pvc-2f798516-6763-11e9-a6c6-5254000daeea/mount 15
-15
+'deploy-app' will then create an application that requests this volume, causing it to be created through the CSI RSD NVMeoF Driver and attached.
 
-# Unstage
-$ csc node -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock unstage --staging-target-path /var/lib/kubelet/plugins/kubernetes.io/csi/pv/pvc-2f798516-6763-11e9-a6c6-5254000daeea/globalmount 15
-15
+## Components
 
-# Unpublish
-$ csc controller -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock unpublish 15 --node-id 1 --timeout 3m
-15
+The full CSI driver functionality comes from a collection of four components as per the CSI spec.
 
-# Delete volume
-$ csc controller -e unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock delete-volume 15
-15
+|Name|Description|Source|
+|---------------------|------|-----------|
+|csi-intel-rsd driver| Driver for CSI interaction with RSD Pooled NVMe Storage|This Repo|
+|node-driver-registrar|Sidecar for registering CSI driver with Kubelet|[Link](https://github.com/kubernetes-csi/node-driver-registrar)|
+|csi-provisioner|Sidecar for dynamic volume provisioning| [Link](https://github.com/kubernetes-csi/external-provisioner)|
+|csi-attacher| Sidecar for attaching volumes to nodes| [Link](https://github.com/kubernetes-csi/external-attacher)|
 
-```
+## Communication and Contribution
 
-Run [CSI-Sanity test suite](https://github.com/kubernetes-csi/csi-test/tree/master/cmd/csi-sanity):
+Report a bug by filing a new issue.
+Contribute by opening a pull request.
 
-```
-# csi-sanity -test.v -ginkgo.focus '.*' --csi.endpoint unix:///var/lib/kubelet/plugins/csi-intel-rsd/csi.sock -csi.testvolumesize 5000000 -csi.mountdir /tmp/csimount -csi.stagingdir /tmp/csistage
-...
-Ran 49 of 70 Specs in 1034.217 seconds
-SUCCESS! -- 49 Passed | 0 Failed | 0 Pending | 21 Skipped
---- PASS: TestSanity (1034.24s)
-PASS
-```
+Reporting a Potential Security Vulnerability: If you have discovered potential security vulnerability in PMEM-CSI, please send an e-mail to secure@intel.com. For issues related to Intel Products, please visit Intel Security Center.
+It is important to include the following details:
+•The projects and versions affected
+•Detailed description of the vulnerability
+•Information on known exploits
+Vulnerability information is extremely sensitive. Please encrypt all security vulnerability reports using our PGP key.
+A member of the Intel Product Security Team will review your e-mail and contact you to collaborate on resolving the issue. For more information on how Intel works to resolve security issues, see: vulnerability handling guidelines.
